@@ -19,6 +19,18 @@ export default function Settings({ settings, setSettings, cards, setCards, prese
   const [toasts, setToasts] = useState([])
   const [customModel, setCustomModel] = useState(!PRESET_MODELS.find(m => m.value === settings.model))
 
+  // Modelos cargados dinámicamente desde la API (respetan el filtro "solo suscripción")
+  const [fetchedModels, setFetchedModels] = useState([])
+  const [modelsStatus, setModelsStatus] = useState(null) // null | 'loading' | 'ok' | 'error'
+  const [modelsMeta, setModelsMeta] = useState(null)
+
+  const isNanoProvider = /nano-?gpt\.com/i.test(settings.baseUrl || '')
+
+  // Opciones del desplegable: modelos cargados de la API, o la lista de ejemplo si no se han cargado.
+  const modelOptions = fetchedModels.length > 0
+    ? fetchedModels.map(m => ({ value: m.id, label: m.name ? `${m.name} (${m.id})` : m.id }))
+    : PRESET_MODELS
+
   const addToast = (msg, type = 'info') => {
     const id = Date.now()
     setToasts(p => [...p, { id, msg, type }])
@@ -26,6 +38,41 @@ export default function Settings({ settings, setSettings, cards, setCards, prese
   }
 
   const update = (key, value) => setSettings(prev => ({ ...prev, [key]: value }))
+
+  const loadModels = async (subscriptionOnlyOverride) => {
+    if (!settings.apiKey) { addToast('Ingresa una API key primero', 'error'); return }
+    if (!settings.baseUrl) { addToast('Ingresa una Base URL', 'error'); return }
+
+    const subscriptionOnly = subscriptionOnlyOverride ?? settings.subscriptionOnly
+    setModelsStatus('loading')
+    try {
+      const res = await fetch('/api/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: settings.apiKey, baseUrl: settings.baseUrl, subscriptionOnly })
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }))
+        throw new Error(err.error || `Error ${res.status}`)
+      }
+      const data = await res.json()
+      setFetchedModels(data.models || [])
+      setModelsMeta(data.meta || null)
+      setModelsStatus('ok')
+      addToast(`${data.models?.length || 0} modelos cargados${data.meta?.subscriptionApplied ? ' (solo suscripción)' : ''}`, 'success')
+    } catch (err) {
+      setModelsStatus('error')
+      addToast(`Error al cargar modelos: ${err.message}`, 'error')
+    }
+  }
+
+  const toggleSubscriptionOnly = (checked) => {
+    update('subscriptionOnly', checked)
+    // Si ya hay modelos cargados, recargar con el nuevo filtro
+    if (fetchedModels.length > 0 || modelsStatus === 'ok') {
+      loadModels(checked)
+    }
+  }
 
   const testConnection = async () => {
     if (!settings.apiKey) { addToast('Ingresa una API key primero', 'error'); return }
@@ -141,6 +188,29 @@ export default function Settings({ settings, setSettings, cards, setCards, prese
             </span>
           </div>
 
+          {/* Solo suscripción switch */}
+          <div className="switch-row">
+            <div className="switch-info">
+              <div className="switch-info-title">
+                Solo suscripción
+                {!isNanoProvider && <span className="tag" style={{ fontSize: '10px' }}>solo nanogpt</span>}
+              </div>
+              <div className="switch-info-desc">
+                Muestra únicamente los modelos incluidos en la suscripción de nanogpt (no los de pago por uso).
+                {!isNanoProvider && ' El filtro solo aplica con un Base URL de nano-gpt.com.'}
+              </div>
+            </div>
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={Boolean(settings.subscriptionOnly)}
+                disabled={!isNanoProvider}
+                onChange={e => toggleSubscriptionOnly(e.target.checked)}
+              />
+              <span className="switch-slider" />
+            </label>
+          </div>
+
           <div className="form-group">
             <label className="form-label">Modelo</label>
             {!customModel ? (
@@ -148,11 +218,11 @@ export default function Settings({ settings, setSettings, cards, setCards, prese
                 <select
                   className="form-select"
                   style={{ flex: 1 }}
-                  value={PRESET_MODELS.find(m => m.value === settings.model) ? settings.model : ''}
+                  value={modelOptions.find(m => m.value === settings.model) ? settings.model : ''}
                   onChange={e => update('model', e.target.value)}
                 >
                   <option value="">Selecciona un modelo...</option>
-                  {PRESET_MODELS.map(m => (
+                  {modelOptions.map(m => (
                     <option key={m.value} value={m.value}>{m.label}</option>
                   ))}
                 </select>
@@ -169,7 +239,29 @@ export default function Settings({ settings, setSettings, cards, setCards, prese
                 <button className="btn btn-ghost btn-sm" onClick={() => setCustomModel(false)}>Lista</button>
               </div>
             )}
-            <span className="form-hint">Los modelos con "thinking" (R1, o1, etc.) activan automáticamente la visualización del razonamiento interno.</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => loadModels()}
+                disabled={modelsStatus === 'loading'}
+              >
+                {modelsStatus === 'loading' ? '⏳ Cargando...' : '↻ Cargar modelos desde la API'}
+              </button>
+              {modelsStatus === 'ok' && modelsMeta && (
+                <span className="form-hint" style={{ margin: 0 }}>
+                  {fetchedModels.length} modelos
+                  {modelsMeta.subscriptionApplied
+                    ? ' · filtrados por suscripción'
+                    : modelsMeta.subscriptionRequested && !modelsMeta.isNano
+                      ? ' · (filtro de suscripción ignorado: no es nanogpt)'
+                      : ''}
+                </span>
+              )}
+            </div>
+            <span className="form-hint">
+              Los modelos con "thinking" (R1, o1, etc.) activan automáticamente la visualización del razonamiento interno.
+              {fetchedModels.length === 0 && ' Sin cargar, se muestra una lista corta de ejemplo.'}
+            </span>
           </div>
 
           {/* Test connection */}

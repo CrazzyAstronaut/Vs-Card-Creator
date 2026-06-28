@@ -17,6 +17,7 @@ Herramienta web para crear tarjetas de personaje para **SillyTavern** con asiste
 - **Importación** — Importa tarjetas ST existentes (JSON) mediante drag & drop o selector de archivo
 - **Editor de campos** — Edita cualquier campo de la tarjeta directamente en la aplicación
 - **API compatible con OpenAI** — Funciona con cualquier proveedor compatible: nano-gpt, OpenAI, OpenRouter, Ollama local, etc.
+- **Carga dinámica de modelos** — Obtén la lista de modelos directamente desde la API, con un switch **"Solo suscripción"** que filtra a los modelos incluidos en la suscripción de nanogpt
 - **Sin hardcodeo** — La API key se guarda en localStorage del navegador, nunca en el código ni en el servidor
 
 ---
@@ -79,6 +80,37 @@ El servidor estará disponible en `http://localhost:3001` (o el puerto configura
 3. Ingresa la **Base URL** (endpoint compatible con OpenAI)
 4. Selecciona o escribe el **modelo** que quieres usar
 5. Haz clic en **"Probar conexión"** para verificar que todo funcione
+
+### Lista de modelos y filtro "Solo suscripción"
+
+En **Configuración → Conexión a la API** puedes pulsar **"↻ Cargar modelos desde la API"** para
+obtener dinámicamente la lista de modelos disponibles de tu proveedor (endpoint OpenAI estándar
+`{baseUrl}/models`).
+
+El switch **"Solo suscripción"** (subscription-only) filtra la lista para mostrar únicamente los
+modelos incluidos en la **suscripción de nanogpt** (no los de pago por uso):
+
+- **Activado:** la app consulta el endpoint dedicado de nanogpt
+  `https://nano-gpt.com/api/subscription/v1/models`, que según su
+  [documentación oficial](https://docs.nano-gpt.com/api-reference/endpoint/models) *"siempre
+  devuelve solo los modelos incluidos en la suscripción de NanoGPT"* (ignora la preferencia
+  "Also show paid models" de la cuenta).
+- **Desactivado:** se usa el endpoint canónico `{baseUrl}/models` con todos los modelos visibles.
+
+**¿Cómo se determina la inclusión en la suscripción?** La respuesta estándar de modelos de nanogpt
+**no** incluye un flag por modelo (`subscription: true/false`). Por eso el filtrado no se hace
+inspeccionando cada modelo, sino consultando el endpoint dedicado que nanogpt mantiene curado:
+
+| Endpoint | Devuelve |
+|----------|----------|
+| `/api/v1/models` | Todos los modelos visibles (respeta preferencias de la cuenta) |
+| `/api/subscription/v1/models` | **Solo** modelos incluidos en la suscripción |
+| `/api/paid/v1/models` | Solo modelos de pago por uso |
+
+El switch solo está habilitado cuando el **Base URL** apunta a `nano-gpt.com`, ya que es una
+característica específica de ese proveedor. Con otros proveedores el filtro se ignora y se muestra
+la lista completa. La lógica de resolución del endpoint está en `server/index.js`
+(`resolveModelsUrl`).
 
 ### Ejemplos de proveedores
 

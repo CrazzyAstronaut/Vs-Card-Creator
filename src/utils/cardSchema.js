@@ -5,7 +5,8 @@ export const DEFAULT_SETTINGS = {
   temperature: 0.8,
   maxTokens: 8192,
   creatorName: '',
-  streamingEnabled: true
+  streamingEnabled: true,
+  subscriptionOnly: false
 }
 
 export function createEmptyCard() {
