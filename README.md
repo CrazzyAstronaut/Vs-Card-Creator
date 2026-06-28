@@ -16,6 +16,9 @@ Herramienta web para crear tarjetas de personaje para **SillyTavern** con asiste
 - **Dashboard** — Visualiza, busca, filtra y descarga todas tus tarjetas creadas
 - **Importación** — Importa tarjetas ST existentes (JSON) mediante drag & drop o selector de archivo
 - **Editor de campos** — Edita cualquier campo de la tarjeta directamente en la aplicación
+- **Traducción ES ⇄ EN** — Botón rápido para traducir la tarjeta entre español e inglés con IA (reemplazar o guardar como copia)
+- **Prompt de imagen (Stable Diffusion)** — Genera un prompt booru a partir de la tarjeta usando plantillas personalizables
+- **Presets de imagen** — Crea y gestiona plantillas de prompt SD con marcadores que la IA rellena según el personaje
 - **API compatible con OpenAI** — Funciona con cualquier proveedor compatible: nano-gpt, OpenAI, OpenRouter, Ollama local, etc.
 - **Carga dinámica de modelos** — Obtén la lista de modelos directamente desde la API, con un switch **"Solo suscripción"** que filtra a los modelos incluidos en la suscripción de nanogpt
 - **Sin hardcodeo** — La API key se guarda en localStorage del navegador, nunca en el código ni en el servidor
@@ -142,6 +145,48 @@ la lista completa. La lógica de resolución del endpoint está en `server/index
 
 ---
 
+## Acciones de IA sobre la tarjeta lista
+
+En la vista de una tarjeta (al abrirla desde el dashboard) hay dos botones rápidos:
+
+### 🌐 Traducir (ES ⇄ EN)
+Traduce los campos de texto de la tarjeta (descripción, personalidad, escenario, mensajes, saludos
+alternativos, etc.) entre español e inglés, conservando los marcadores `{{user}}` / `{{char}}`, el
+formato y los nombres propios. Tras generar la traducción puedes **reemplazar la tarjeta actual** o
+**guardar una copia traducida** (con sufijo `(EN)` / `(ES)`).
+
+### 🎨 Prompt de imagen (Stable Diffusion)
+Genera un prompt en estilo Danbooru/booru listo para pegar en Stable Diffusion, a partir de una
+**plantilla de imagen** que puedes elegir y editar al vuelo. La IA sustituye los marcadores `<...>`
+por etiquetas que describen al personaje, manteniendo intacto el resto (LoRA, tags de calidad,
+`BREAK`, pesos como `(tag:1.4)`).
+
+## Presets de imagen
+
+En la sección **Presets Imagen** del menú lateral puedes crear, editar, duplicar y eliminar
+plantillas de prompt para Stable Diffusion. Una plantilla usa marcadores entre `<corchetes angulares>`
+que la IA rellena según el personaje. Ejemplo (incluido por defecto):
+
+```
+<lora:ratatatat74:1>, MATURE FEMALE, (masterpiece), (best quality), (ultra-detailed), amazing quality, very aesthetic, illustration, perfect composition, intricate details, realistic, 1girl, simple background, black background, cowboy-shot, BREAK,
+looking at viewer, <Upper Description>, BREAK,
+<Medium Description>, BREAK,
+<Bottom Description>
+```
+
+Resultado generado por la IA (ejemplo):
+
+```
+<lora:ratatatat74:1>, MATURE FEMALE, (masterpiece), (best quality), (ultra-detailed), amazing quality, very aesthetic, illustration, perfect composition, intricate details, realistic, 1girl, simple background, black background, cowboy-shot, BREAK,
+looking at viewer, blue eyes, gray hair, long hair, bangs, BREAK,
+(big breasts:1.4), school shirt, white shirt, bare stomach, red tie, BREAK,
+small waist, (wide hips:1.5), short skirt, scholar skirt, Japanese School Uniforms
+```
+
+Los marcadores por zonas se interpretan así: **Upper** = cabeza/cara/pelo/ojos/expresión ·
+**Medium** = torso/pecho/ropa superior · **Bottom** = cintura/caderas/ropa inferior. Para otros
+nombres de marcador, la IA infiere el significado.
+
 ## Formato de salida (ST Character Card V2)
 
 Las tarjetas se exportan como archivos `.json` con la siguiente estructura:
@@ -209,14 +254,17 @@ Vs-Card-Creator/
 │   │   ├── Dashboard.jsx   # Panel principal de tarjetas
 │   │   ├── ChatCreate.jsx  # Interfaz de creación con IA
 │   │   ├── CardPreview.jsx # Vista y editor de tarjeta
-│   │   ├── PresetManager.jsx # Gestión de presets
+│   │   ├── PresetManager.jsx # Gestión de presets de texto (+ asistente IA)
+│   │   ├── ImagePresetManager.jsx # Gestión de presets de imagen (SD)
 │   │   ├── Settings.jsx    # Configuración
 │   │   └── Sidebar.jsx     # Navegación lateral
 │   ├── hooks/
 │   │   └── useLocalStorage.js
 │   ├── utils/
-│   │   ├── cardSchema.js   # Utilidades del formato ST
-│   │   └── defaultPresets.js
+│   │   ├── cardSchema.js   # Utilidades del formato ST + helpers IA
+│   │   ├── aiClient.js     # Cliente de streaming para la API de IA
+│   │   ├── defaultPresets.js
+│   │   └── defaultImagePresets.js
 │   └── App.jsx
 ├── server/
 │   └── index.js            # Express API proxy (evita CORS)

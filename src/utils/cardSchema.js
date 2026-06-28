@@ -143,6 +143,31 @@ export function stripPresetMarkers(text) {
   return t.trim()
 }
 
+// ── Translation helper ──
+// La traducción vuelve entre marcadores propios para no chocar con bloques de
+// código que pudieran aparecer en mes_example.
+export function extractTranslatedCard(text) {
+  const m = text.match(/<<<CARD_JSON>>>([\s\S]*?)<<<END_CARD_JSON>>>/)
+  if (m) {
+    try { return JSON.parse(m[1].trim()) } catch { /* fall through */ }
+  }
+  // Fallback: cualquier bloque JSON válido en el texto
+  const block = text.match(/\{[\s\S]*\}/)
+  if (block) {
+    try { return JSON.parse(block[0]) } catch {}
+  }
+  return null
+}
+
+// ── Stable Diffusion prompt helper ──
+// Limpia el prompt devuelto por la IA (quita posibles vallas de código).
+export function cleanPromptOutput(text) {
+  let t = (text || '').trim()
+  const fence = t.match(/```(?:[a-zA-Z]*)?\s*([\s\S]*?)\s*```/)
+  if (fence) return fence[1].trim()
+  return t
+}
+
 export function parseThinkingContent(content) {
   const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/s)
   if (thinkMatch) {
