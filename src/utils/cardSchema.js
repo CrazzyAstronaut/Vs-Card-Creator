@@ -159,6 +159,17 @@ export function extractTranslatedCard(text) {
   return null
 }
 
+// Quita los marcadores <<<CARD_JSON>>> del texto conversacional mostrado en el
+// chat de edición con IA (incluye marcador de apertura parcial durante streaming).
+export function stripCardMarkers(text) {
+  let t = (text || '').replace(/<<<CARD_JSON>>>[\s\S]*?<<<END_CARD_JSON>>>/g, '')
+  const open = t.indexOf('<<<CARD_JSON>>>')
+  if (open !== -1) t = t.slice(0, open)
+  const partial = t.match(/<<<[A-Z_]*$/)
+  if (partial) t = t.slice(0, partial.index)
+  return t.trim()
+}
+
 // ── Stable Diffusion prompt helper ──
 // Limpia el prompt devuelto por la IA (quita posibles vallas de código).
 export function cleanPromptOutput(text) {

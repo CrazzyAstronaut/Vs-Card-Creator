@@ -147,7 +147,16 @@ la lista completa. La lógica de resolución del endpoint está en `server/index
 
 ## Acciones de IA sobre la tarjeta lista
 
-En la vista de una tarjeta (al abrirla desde el dashboard) hay dos botones rápidos:
+En la vista de una tarjeta (al abrirla desde el dashboard) hay tres botones rápidos. Además, cada
+tarjeta del dashboard tiene accesos directos (✏️ y 🎨) que abren la tarjeta directamente en el
+modo correspondiente.
+
+### ✏️ Editar con IA
+Despliega un panel de chat a la derecha (igual que el asistente de presets) donde pides cambios en
+lenguaje natural — por ejemplo *"hazla más tímida"*, *"añade un trasfondo trágico"* o *"cambia el
+escenario a una cafetería"*. La IA responde de forma conversacional, **actualiza la tarjeta y la
+guarda automáticamente**, y los campos modificados parpadean en la columna izquierda. Muestra
+animación de skeleton mientras genera.
 
 ### 🌐 Traducir (ES ⇄ EN)
 Traduce los campos de texto de la tarjeta (descripción, personalidad, escenario, mensajes, saludos

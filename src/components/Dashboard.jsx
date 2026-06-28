@@ -210,6 +210,8 @@ export default function Dashboard({ cards, setCards, settings }) {
               key={card._id}
               card={card}
               onClick={() => navigate(`/card/${card._id}`)}
+              onEditAi={(e) => { e.stopPropagation(); navigate(`/card/${card._id}?panel=edit`) }}
+              onSdPrompt={(e) => { e.stopPropagation(); navigate(`/card/${card._id}?panel=sd`) }}
               onDownload={(e) => { e.stopPropagation(); downloadCard(card) }}
               onDelete={(e) => deleteCard(card._id, e)}
             />
@@ -229,7 +231,7 @@ export default function Dashboard({ cards, setCards, settings }) {
   )
 }
 
-function CharCard({ card, onClick, onDownload, onDelete }) {
+function CharCard({ card, onClick, onDownload, onDelete, onEditAi, onSdPrompt }) {
   const name = card.data?.name || 'Sin nombre'
   const desc = card.data?.description || card.data?.personality || ''
   const tags = (card.data?.tags || []).slice(0, 4)
@@ -260,6 +262,12 @@ function CharCard({ card, onClick, onDownload, onDelete }) {
       <div className="char-card-actions">
         <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={e => { e.stopPropagation(); onClick() }}>
           Ver
+        </button>
+        <button className="btn btn-ghost btn-sm btn-icon" title="Editar con IA" onClick={onEditAi}>
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+        </button>
+        <button className="btn btn-ghost btn-sm btn-icon" title="Prompt de imagen (Stable Diffusion)" onClick={onSdPrompt}>
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
         </button>
         <button className="btn btn-ghost btn-sm btn-icon" title="Descargar JSON" onClick={onDownload}>
           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>

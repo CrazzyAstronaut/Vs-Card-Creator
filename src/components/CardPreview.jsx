@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { downloadCard, CARD_FIELD_LABELS, cardToStorageItem, extractTranslatedCard, cleanPromptOutput } from '../utils/cardSchema.js'
+import { useState, useRef, useEffect } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { downloadCard, CARD_FIELD_LABELS, cardToStorageItem, extractTranslatedCard, cleanPromptOutput, stripCardMarkers } from '../utils/cardSchema.js'
 import { streamChat } from '../utils/aiClient.js'
 
 function formatDate(iso) {
@@ -35,6 +35,36 @@ Reglas:
 Incluye en el JSON solo los campos que recibas con contenido.`
 }
 
+const CARD_EDIT_PROMPT = `Eres un editor experto de tarjetas de personaje de SillyTavern (formato chara_card_v2). Ayudas al usuario a MODIFICAR una tarjeta existente conversando con él.
+
+En cada turno te proporcionaré el estado ACTUAL de la tarjeta (JSON). El usuario te pedirá cambios.
+
+Tu trabajo:
+1. Responde de forma breve y conversacional en español, explicando qué cambiaste y por qué. Haz preguntas si algo no está claro.
+2. Aplica SOLO los cambios solicitados; conserva el resto de los campos tal cual están.
+3. Conserva EXACTAMENTE los marcadores {{user}} y {{char}} y el formato.
+4. Al FINAL de tu mensaje incluye SIEMPRE la tarjeta COMPLETA y actualizada entre estos marcadores EXACTOS (nunca uses comillas triples), con JSON VÁLIDO (escapa los saltos de línea como \\n y las comillas como \\"):
+
+<<<CARD_JSON>>>
+{
+  "name": "...",
+  "description": "...",
+  "personality": "...",
+  "scenario": "...",
+  "first_mes": "...",
+  "mes_example": "...",
+  "creator_notes": "...",
+  "system_prompt": "...",
+  "post_history_instructions": "...",
+  "alternate_greetings": ["..."],
+  "tags": ["..."],
+  "creator": "...",
+  "character_version": "..."
+}
+<<<END_CARD_JSON>>>
+
+Incluye SIEMPRE todos los campos que tenga la tarjeta (aunque no cambien) para no perder información.`
+
 const SD_PROMPT = `Eres un experto creando prompts para Stable Diffusion en estilo Danbooru/booru (etiquetas en inglés separadas por comas).
 
 Recibirás una PLANTILLA con marcadores entre < > y la información de un personaje. Tu tarea es sustituir ÚNICAMENTE los marcadores < > por etiquetas que describan ese aspecto del personaje.
@@ -50,10 +80,21 @@ Reglas estrictas:
 export default function CardPreview({ cards, setCards, settings, imagePresets = [] }) {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [tab, setTab] = useState('view')
   const [editing, setEditing] = useState(null)
   const [editValue, setEditValue] = useState('')
   const [toasts, setToasts] = useState([])
+
+  // AI edit chat panel
+  const [aiEditOpen, setAiEditOpen] = useState(false)
+  const [aiMessages, setAiMessages] = useState([])
+  const [aiInput, setAiInput] = useState('')
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [flashFields, setFlashFields] = useState(false)
+  const aiAbortRef = useRef(null)
+  const aiEndRef = useRef(null)
+  const autoOpenedRef = useRef(false)
 
   // Translation modal
   const [translateOpen, setTranslateOpen] = useState(false)
@@ -241,8 +282,99 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
     }
   }
 
+  // ── AI edit chat ──
+  const sendAiEdit = async (text) => {
+    if (!text.trim() || aiGenerating) return
+    if (!settings?.apiKey) { addToast('Configura tu API key en Configuración', 'error'); return }
+
+    const userMsg = { id: Date.now(), role: 'user', content: text.trim() }
+    const aiId = Date.now() + 1
+    const history = aiMessages.map(m => ({ role: m.role, content: m.content }))
+
+    setAiMessages(prev => [...prev, userMsg, { id: aiId, role: 'assistant', content: '', isStreaming: true }])
+    setAiInput('')
+    setAiGenerating(true)
+
+    const currentCardJson = JSON.stringify(card.data, null, 2)
+    const apiMessages = [
+      { role: 'system', content: CARD_EDIT_PROMPT },
+      { role: 'system', content: `Estado ACTUAL de la tarjeta:\n${currentCardJson}` },
+      ...history,
+      { role: 'user', content: text.trim() }
+    ]
+
+    try {
+      const controller = new AbortController()
+      aiAbortRef.current = controller
+      const full = await streamChat({
+        settings,
+        signal: controller.signal,
+        messages: apiMessages,
+        onDelta: (acc) => {
+          const display = stripCardMarkers(acc)
+          setAiMessages(prev => prev.map(m => m.id === aiId ? { ...m, content: display } : m))
+        }
+      })
+
+      const parsed = extractTranslatedCard(full)
+      const display = stripCardMarkers(full)
+      setAiMessages(prev => prev.map(m =>
+        m.id === aiId
+          ? { ...m, content: display || (parsed ? 'He actualizado la tarjeta.' : full), isStreaming: false }
+          : m
+      ))
+
+      if (parsed) {
+        const allowed = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes', 'system_prompt', 'post_history_instructions', 'alternate_greetings', 'tags', 'creator', 'character_version']
+        const newData = { ...card.data }
+        allowed.forEach(k => { if (parsed[k] !== undefined) newData[k] = parsed[k] })
+        const updated = { ...card, _updatedAt: new Date().toISOString(), data: newData }
+        setCards(prev => prev.map(c => c._id === id ? updated : c))
+        setFlashFields(true)
+        setTimeout(() => setFlashFields(false), 700)
+      } else {
+        addToast('La IA respondió pero no se pudo aplicar la actualización', 'info')
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setAiMessages(prev => prev.map(m => m.id === aiId ? { ...m, content: '[Generación cancelada]', isStreaming: false } : m))
+      } else {
+        setAiMessages(prev => prev.map(m => m.id === aiId ? { ...m, content: `Error: ${err.message}`, isStreaming: false, isError: true } : m))
+        addToast(`Error: ${err.message}`, 'error')
+      }
+    } finally {
+      setAiGenerating(false)
+      aiAbortRef.current = null
+    }
+  }
+
+  const handleAiKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendAiEdit(aiInput)
+    }
+  }
+
+  // Auto-scroll del chat
+  useEffect(() => {
+    aiEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [aiMessages])
+
+  // Auto-abrir un panel según ?panel=edit|sd (al llegar desde el dashboard)
+  useEffect(() => {
+    if (autoOpenedRef.current || !card) return
+    const panel = searchParams.get('panel')
+    if (panel === 'edit') { setAiEditOpen(true); autoOpenedRef.current = true; setSearchParams({}, { replace: true }) }
+    else if (panel === 'sd') { openSd(); autoOpenedRef.current = true; setSearchParams({}, { replace: true }) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, card])
+
+  const flashClass = flashFields ? 'field-updated' : ''
+
   return (
-    <div className="card-preview-page">
+    <div className="card-preview-page" style={aiEditOpen ? { maxWidth: 'none' } : undefined}>
+      <div className={aiEditOpen ? 'card-preview-layout' : undefined}>
+      <div className={aiEditOpen ? 'card-preview-main' : undefined}>
       {/* Header */}
       <div className="card-preview-header">
         <div className="card-preview-title-row">
@@ -278,6 +410,10 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
 
       {/* Quick AI actions */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '24px', flexWrap: 'wrap' }}>
+        <button className={`btn btn-sm ${aiEditOpen ? 'btn-secondary' : 'btn-primary'}`} onClick={() => setAiEditOpen(v => !v)}>
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+          {aiEditOpen ? 'Ocultar asistente' : 'Editar con IA'}
+        </button>
         <button className="btn btn-primary btn-sm" onClick={openTranslate}>
           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>
           Traducir (ES ⇄ EN)
@@ -301,7 +437,7 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
           {EDITABLE_FIELDS.filter(f => d[f]).map(field => (
             <div key={field} className="card-field">
               <div className="card-field-label">{CARD_FIELD_LABELS[field] || field}</div>
-              <div className="card-field-value">{d[field]}</div>
+              <div className={`card-field-value ${flashClass}`}>{d[field]}</div>
             </div>
           ))}
 
@@ -373,6 +509,84 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
           <div className="json-viewer">{JSON.stringify({ spec: card.spec, spec_version: card.spec_version, data: card.data }, null, 2)}</div>
         </div>
       )}
+      </div>{/* /card-preview-main */}
+
+      {/* AI edit chat panel */}
+      {aiEditOpen && (
+        <aside className="ai-assist-panel card-edit-panel">
+          <div className="ai-assist-header">
+            <span className="ai-assist-title">
+              <svg width="16" height="16" fill="none" stroke="var(--accent-4)" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+              Editar con IA
+            </span>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {aiMessages.length > 0 && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setAiMessages([])} title="Reiniciar conversación">Limpiar</button>
+              )}
+              <button className="modal-close" onClick={() => setAiEditOpen(false)} title="Cerrar">✕</button>
+            </div>
+          </div>
+
+          <div className="messages-list">
+            {aiMessages.length === 0 && (
+              <div className="ai-assist-empty">
+                <div className="ai-assist-empty-icon">✏️</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-3)' }}>Edita esta tarjeta con IA</div>
+                <div style={{ fontSize: '12px', lineHeight: 1.7 }}>
+                  Pide cambios en lenguaje natural (ej: "hazla más tímida", "añade un trasfondo trágico", "cambia el escenario a una cafetería"). La IA actualizará la tarjeta y verás los campos cambiar a la izquierda.
+                </div>
+              </div>
+            )}
+
+            {aiMessages.map(msg => (
+              <div key={msg.id} className={`message ${msg.role} ${msg.isError ? 'error' : ''}`}>
+                <div className="message-role">{msg.role === 'user' ? 'Tú' : 'IA'}</div>
+                {msg.role === 'assistant' && msg.isStreaming && !msg.content ? (
+                  <div className="skeleton-bubble">
+                    <span className="skeleton skeleton-line skeleton-w-90" />
+                    <span className="skeleton skeleton-line skeleton-w-100" />
+                    <span className="skeleton skeleton-line skeleton-w-70" />
+                    <span className="skeleton skeleton-line skeleton-w-40" />
+                  </div>
+                ) : (
+                  <div className="message-bubble">
+                    {msg.content}
+                    {msg.isStreaming && <span style={{ opacity: 0.5 }}>▋</span>}
+                  </div>
+                )}
+              </div>
+            ))}
+            <div ref={aiEndRef} />
+          </div>
+
+          <div className="chat-input-area">
+            <div className="chat-input-row">
+              <textarea
+                className="chat-textarea"
+                placeholder="Pide un cambio a la tarjeta..."
+                value={aiInput}
+                onChange={e => setAiInput(e.target.value)}
+                onKeyDown={handleAiKeyDown}
+                rows={1}
+                disabled={aiGenerating}
+              />
+              {aiGenerating ? (
+                <button className="chat-send-btn" onClick={() => aiAbortRef.current?.abort()} title="Detener" style={{ background: 'var(--error)' }}>
+                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                </button>
+              ) : (
+                <button className="chat-send-btn" onClick={() => sendAiEdit(aiInput)} disabled={!aiInput.trim()} title="Enviar (Enter)">
+                  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-4)' }}>
+              Enter para enviar · Los cambios se guardan automáticamente
+            </div>
+          </div>
+        </aside>
+      )}
+      </div>{/* /card-preview-layout */}
 
       {/* ── Translation modal ── */}
       {translateOpen && (
