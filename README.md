@@ -19,6 +19,9 @@ Herramienta web para crear tarjetas de personaje para **SillyTavern** con asiste
 - **Traducción ES ⇄ EN** — Botón rápido para traducir la tarjeta entre español e inglés con IA (reemplazar o guardar como copia)
 - **Prompt de imagen (Stable Diffusion)** — Genera un prompt booru a partir de la tarjeta usando plantillas personalizables
 - **Presets de imagen** — Crea y gestiona plantillas de prompt SD con marcadores que la IA rellena según el personaje
+- **Universo compartido** — Crea personajes relacionados entre sí (familiares, rivales, mismo mundo) con modo automático o manual
+- **Relaciones entre tarjetas** — Vincula personajes y deja que la IA ajuste una tarjeta para reflejar la relación, según el preset
+- **Detalles de creación** — Cada tarjeta registra cómo se creó (modelo, distribuidor, preset, modo, temperature, universo)
 - **API compatible con OpenAI** — Funciona con cualquier proveedor compatible: nano-gpt, OpenAI, OpenRouter, Ollama local, etc.
 - **Carga dinámica de modelos** — Obtén la lista de modelos directamente desde la API, con un switch **"Solo suscripción"** que filtra a los modelos incluidos en la suscripción de nanogpt
 - **Sin hardcodeo** — La API key se guarda en localStorage del navegador, nunca en el código ni en el servidor
@@ -144,6 +147,36 @@ la lista completa. La lógica de resolución del endpoint está en `server/index
 6. También puedes forzar la generación con el botón **"⚡ Generar ahora"**
 
 ---
+
+## Universo compartido
+
+Activa el switch **🌐 Universo** en la barra de creación para que la IA pueda leer y relacionar el
+nuevo personaje con los que ya tienes guardados. Tiene dos modos:
+
+- **Auto** — La IA recibe un *roster* de todos tus personajes y, si mencionas a alguno por su nombre
+  (ej: *"Quiero hacer a la hermana de Elara, parecida en apariencia pero su personalidad es…"*), lee
+  los datos reales de **Elara**, reutiliza sus rasgos físicos y mantiene la coherencia del mundo.
+- **Manual** — Pulsa **"Tarjetas (n)"** y selecciona explícitamente con qué personajes podría
+  relacionarse. La IA recibirá los datos completos de esas tarjetas.
+
+Al guardar, el personaje queda **vinculado** (relación bidireccional) con los personajes usados como
+referencia, y esas relaciones aparecen en la vista de la tarjeta.
+
+## Relaciones entre tarjetas
+
+En la vista de una tarjeta, la sección **🌐 Relaciones de universo** permite **añadir o quitar
+vínculos** con otros personajes (hermana, rival, pareja, mismo mundo…). Al añadir una relación puedes
+activar **"Ajustar esta tarjeta con IA"**: la IA modifica ligeramente el personaje para reflejar el
+vínculo de forma coherente, usando el **preset** que elijas (introduce guiños, coherencia de mundo y
+matices sin reescribirlo todo). Las relaciones son bidireccionales y no se incluyen en el `.json`
+exportado (son metadatos de la app).
+
+## Detalles de creación
+
+Cada tarjeta guarda y muestra **cómo se creó** en la sección **🛠️ Detalles de creación**:
+distribuidor (proveedor de la API), modelo, modo (Chat / Co-work / Traducción / Importada), preset
+usado, temperature, si se usó universo compartido (manual/automático) y las fechas de creación y
+edición.
 
 ## Acciones de IA sobre la tarjeta lista
 

@@ -90,15 +90,21 @@ export function cardToStorageItem(card, meta = {}) {
     _meta: {
       presetId: meta.presetId || null,
       presetName: meta.presetName || null,
-      mode: meta.mode || 'chat'
+      mode: meta.mode || 'chat',
+      model: meta.model || null,
+      provider: meta.provider || null,
+      baseUrl: meta.baseUrl || null,
+      temperature: meta.temperature ?? null,
+      sharedUniverse: meta.sharedUniverse || null
     },
+    _relations: Array.isArray(meta.relations) ? meta.relations : [],
     ...card
   }
 }
 
 export function downloadCard(card) {
   // Strip internal metadata fields before export
-  const { _id, _createdAt, _updatedAt, _meta, ...exportCard } = card
+  const { _id, _createdAt, _updatedAt, _meta, _relations, ...exportCard } = card
   const json = JSON.stringify(exportCard, null, 2)
   const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -141,6 +147,60 @@ export function stripPresetMarkers(text) {
   const partial = t.match(/<<<[A-Z_]*$/)
   if (partial) t = t.slice(0, partial.index)
   return t.trim()
+}
+
+// ── Shared universe helpers ──
+const PROVIDER_MAP = {
+  'nano-gpt.com': 'NanoGPT',
+  'api.nano-gpt.com': 'NanoGPT',
+  'api.openai.com': 'OpenAI',
+  'openrouter.ai': 'OpenRouter',
+  'api.anthropic.com': 'Anthropic',
+  'generativelanguage.googleapis.com': 'Google'
+}
+
+export function providerFromBaseUrl(baseUrl) {
+  if (!baseUrl) return 'Desconocido'
+  try {
+    const host = new URL(baseUrl).hostname.replace(/^www\./, '')
+    if (PROVIDER_MAP[host]) return PROVIDER_MAP[host]
+    if (host === 'localhost' || host === '127.0.0.1') return 'Local (Ollama/otro)'
+    return host
+  } catch {
+    return baseUrl
+  }
+}
+
+// Resumen detallado de un personaje para inyectar como contexto a la IA.
+export function summarizeCardForContext(card) {
+  const d = card.data || {}
+  const parts = [`### ${d.name || 'Sin nombre'}`]
+  if (d.description) parts.push(`Apariencia/Descripción: ${d.description}`)
+  if (d.personality) parts.push(`Personalidad: ${d.personality}`)
+  if (d.scenario) parts.push(`Escenario: ${d.scenario}`)
+  if (Array.isArray(d.tags) && d.tags.length) parts.push(`Etiquetas: ${d.tags.join(', ')}`)
+  return parts.join('\n')
+}
+
+// Lista compacta (roster) de todos los personajes para el modo automático.
+export function buildRosterSummary(cards) {
+  if (!cards.length) return '(todavía no hay personajes en el universo)'
+  return cards.map(c => {
+    const d = c.data || {}
+    const snippet = (d.description || d.personality || '').replace(/\s+/g, ' ').slice(0, 110)
+    const tags = d.tags?.length ? ` [${d.tags.slice(0, 4).join(', ')}]` : ''
+    return `- ${d.name || 'Sin nombre'}${tags}${snippet ? `: ${snippet}…` : ''}`
+  }).join('\n')
+}
+
+// Detecta personajes existentes mencionados por nombre en un texto.
+export function detectMentionedCards(text, cards) {
+  if (!text) return []
+  const lower = text.toLowerCase()
+  return cards.filter(c => {
+    const name = (c.data?.name || '').trim().toLowerCase()
+    return name.length >= 2 && lower.includes(name)
+  })
 }
 
 // ── Translation helper ──

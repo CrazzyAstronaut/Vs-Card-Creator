@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { extractCardFromText, cardToStorageItem, parseThinkingContent, downloadCard } from '../utils/cardSchema.js'
+import { extractCardFromText, cardToStorageItem, parseThinkingContent, downloadCard, providerFromBaseUrl, summarizeCardForContext, buildRosterSummary, detectMentionedCards } from '../utils/cardSchema.js'
 
 const COWORK_STEPS = ['Concepto', 'Personalidad', 'Apariencia', 'Historia', 'Escenario', 'Voz', 'Generando']
 
@@ -23,6 +23,12 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
   const [thinkingOpen, setThinkingOpen] = useState({})
   const [toasts, setToasts] = useState([])
   const [saved, setSaved] = useState(false)
+  // Shared universe
+  const [sharedUniverse, setSharedUniverse] = useState(false)
+  const [suMode, setSuMode] = useState('auto') // 'auto' | 'manual'
+  const [selectedRelatedIds, setSelectedRelatedIds] = useState([])
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [usedRelationIds, setUsedRelationIds] = useState([]) // ids realmente usados como contexto
   const textareaRef = useRef(null)
   const messagesEndRef = useRef(null)
   const abortRef = useRef(null)
@@ -49,9 +55,10 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const buildApiMessages = useCallback((msgs, systemPrompt) => {
+  const buildApiMessages = useCallback((msgs, systemPrompt, extraSystems = []) => {
     const apiMsgs = []
     if (systemPrompt) apiMsgs.push({ role: 'system', content: systemPrompt })
+    extraSystems.forEach(s => { if (s) apiMsgs.push({ role: 'system', content: s }) })
     msgs.forEach(m => {
       if (m.role === 'user' || m.role === 'assistant') {
         apiMsgs.push({ role: m.role, content: m.content || '' })
@@ -59,6 +66,31 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
     })
     return apiMsgs
   }, [])
+
+  // Construye el contexto de "Universo compartido" para inyectarlo a la IA.
+  const buildUniverseContext = useCallback((userText) => {
+    if (!sharedUniverse) return { sys: null, ids: [] }
+    let related = []
+    if (suMode === 'manual') {
+      related = cards.filter(c => selectedRelatedIds.includes(c._id))
+    } else {
+      const convoText = [...messages.map(m => m.content || ''), userText].join('\n')
+      related = detectMentionedCards(convoText, cards)
+    }
+    const ids = related.map(c => c._id)
+    const detailBlocks = related.map(summarizeCardForContext).join('\n\n')
+
+    let sys = '[MODO UNIVERSO COMPARTIDO ACTIVADO]\n'
+    if (suMode === 'auto') {
+      sys += 'Personajes existentes en este universo (roster). Si el usuario menciona a alguno, usa SUS datos reales para mantener coherencia:\n'
+      sys += buildRosterSummary(cards) + '\n'
+    }
+    if (detailBlocks) {
+      sys += '\nDatos COMPLETOS de los personajes relacionados con los que debes mantener coherencia:\n' + detailBlocks + '\n'
+    }
+    sys += '\nCuando el nuevo personaje tenga relación con alguno (familiar, pareja, rival, amigo, mismo mundo, apariencia parecida, etc.), respeta y referencia sus datos reales. Si se pide "parecido/a en apariencia", reutiliza rasgos físicos concretos del personaje indicado.'
+    return { sys, ids }
+  }, [sharedUniverse, suMode, cards, selectedRelatedIds, messages])
 
   const sendMessage = useCallback(async (userText) => {
     if (!userText.trim() || isLoading) return
@@ -77,7 +109,9 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
 
     const systemPrompt = selectedPreset?.systemPrompt || ''
     const allMsgs = [...messages, userMsg]
-    const apiMessages = buildApiMessages(allMsgs, systemPrompt)
+    const { sys: universeSys, ids: relIds } = buildUniverseContext(userText)
+    if (relIds.length) setUsedRelationIds(prev => Array.from(new Set([...prev, ...relIds])))
+    const apiMessages = buildApiMessages(allMsgs, systemPrompt, universeSys ? [universeSys] : [])
 
     try {
       const controller = new AbortController()
@@ -167,7 +201,7 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [isLoading, settings, selectedPreset, messages, mode, buildApiMessages])
+  }, [isLoading, settings, selectedPreset, messages, mode, buildApiMessages, buildUniverseContext])
 
   // Start co-work with AI greeting
   const startCowork = useCallback(async () => {
@@ -245,14 +279,37 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
 
   const saveCard = () => {
     if (!currentCard) return
+    const relIds = sharedUniverse
+      ? (suMode === 'manual' ? selectedRelatedIds : usedRelationIds).filter(Boolean)
+      : []
+    const relations = relIds.map(rid => {
+      const c = cards.find(x => x._id === rid)
+      return { targetId: rid, name: c?.data?.name || 'Personaje', type: 'universo', note: '' }
+    })
+
     const item = cardToStorageItem(currentCard, {
       presetId: selectedPreset?.id,
       presetName: selectedPreset?.name,
-      mode
+      mode,
+      model: settings.model,
+      provider: providerFromBaseUrl(settings.baseUrl),
+      baseUrl: settings.baseUrl,
+      temperature: settings.temperature,
+      sharedUniverse: sharedUniverse ? suMode : null,
+      relations
     })
-    setCards(prev => [item, ...prev])
+
+    // Guarda la tarjeta nueva y añade la relación inversa a las relacionadas.
+    setCards(prev => {
+      const withInverse = prev.map(c =>
+        relIds.includes(c._id)
+          ? { ...c, _relations: [...(c._relations || []).filter(r => r.targetId !== item._id), { targetId: item._id, name: item.data?.name || 'Personaje', type: 'universo', note: '' }] }
+          : c
+      )
+      return [item, ...withInverse]
+    })
     setSaved(true)
-    addToast(`"${currentCard.data?.name || 'Personaje'}" guardado en el dashboard`, 'success')
+    addToast(`"${currentCard.data?.name || 'Personaje'}" guardado${relations.length ? ` · ${relations.length} relación(es)` : ''}`, 'success')
   }
 
   const handleKeyDown = (e) => {
@@ -271,6 +328,7 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
     setCurrentCard(null)
     setCoworkStep(0)
     setSaved(false)
+    setUsedRelationIds([])
   }
 
   const coworkProgress = Math.round((coworkStep / (COWORK_STEPS.length - 1)) * 100)
@@ -306,6 +364,28 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
             <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
             Co-work
           </button>
+        </div>
+
+        {/* Universo compartido */}
+        <div className="su-toggle">
+          <label className="switch" title="Universo compartido">
+            <input type="checkbox" checked={sharedUniverse} onChange={e => setSharedUniverse(e.target.checked)} />
+            <span className="switch-slider" />
+          </label>
+          <span className="su-label">🌐 Universo</span>
+          {sharedUniverse && (
+            <>
+              <div className="su-mini-toggle">
+                <button className={`su-mini-btn ${suMode === 'auto' ? 'active' : ''}`} onClick={() => setSuMode('auto')} title="La IA detecta automáticamente los personajes mencionados">Auto</button>
+                <button className={`su-mini-btn ${suMode === 'manual' ? 'active' : ''}`} onClick={() => setSuMode('manual')} title="Selecciona manualmente las tarjetas relacionadas">Manual</button>
+              </div>
+              {suMode === 'manual' && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setPickerOpen(true)}>
+                  Tarjetas ({selectedRelatedIds.length})
+                </button>
+              )}
+            </>
+          )}
         </div>
 
         <div style={{ flex: 1 }} />
@@ -473,6 +553,47 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
           )}
         </div>
       </div>
+
+      {/* Card picker modal (manual shared universe) */}
+      {pickerOpen && (
+        <div className="modal-overlay" onClick={() => setPickerOpen(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">🌐 Tarjetas relacionadas</span>
+              <button className="modal-close" onClick={() => setPickerOpen(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p className="text-muted">Selecciona las tarjetas con las que el nuevo personaje podría tener relación. La IA leerá sus datos para mantener coherencia.</p>
+              {cards.length === 0 ? (
+                <div className="text-muted" style={{ textAlign: 'center', padding: '20px' }}>No hay tarjetas guardadas todavía.</div>
+              ) : (
+                <div className="picker-list">
+                  {cards.map(c => {
+                    const sel = selectedRelatedIds.includes(c._id)
+                    return (
+                      <div key={c._id} className={`picker-item ${sel ? 'selected' : ''}`}
+                        onClick={() => setSelectedRelatedIds(prev => sel ? prev.filter(id => id !== c._id) : [...prev, c._id])}>
+                        <div className="picker-check">{sel ? '✓' : ''}</div>
+                        <div className="picker-avatar">{(c.data?.name || '?').charAt(0).toUpperCase()}</div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-1)' }} className="truncate">{c.data?.name || 'Sin nombre'}</div>
+                          <div className="truncate" style={{ fontSize: '12px', color: 'var(--text-4)' }}>{(c.data?.description || c.data?.personality || '').slice(0, 80)}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              {selectedRelatedIds.length > 0 && (
+                <button className="btn btn-ghost" onClick={() => setSelectedRelatedIds([])}>Limpiar selección</button>
+              )}
+              <button className="btn btn-primary" onClick={() => setPickerOpen(false)}>Listo ({selectedRelatedIds.length})</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toasts */}
       <div className="toast-container">

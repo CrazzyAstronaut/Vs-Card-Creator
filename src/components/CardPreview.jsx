@@ -77,7 +77,7 @@ Reglas estrictas:
 - Usa pesos (tag:1.2-1.5) solo cuando aporte, como en el ejemplo.
 - Devuelve ÚNICAMENTE el prompt final resultante. Sin explicaciones, sin comillas de código, sin texto adicional.`
 
-export default function CardPreview({ cards, setCards, settings, imagePresets = [] }) {
+export default function CardPreview({ cards, setCards, settings, imagePresets = [], presets = [] }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -95,6 +95,15 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
   const aiAbortRef = useRef(null)
   const aiEndRef = useRef(null)
   const autoOpenedRef = useRef(false)
+
+  // Relations
+  const [relAddOpen, setRelAddOpen] = useState(false)
+  const [relTarget, setRelTarget] = useState('')
+  const [relType, setRelType] = useState('')
+  const [relNote, setRelNote] = useState('')
+  const [relApplyAI, setRelApplyAI] = useState(false)
+  const [relPresetId, setRelPresetId] = useState(presets[0]?.id || '')
+  const [relBusy, setRelBusy] = useState(false)
 
   // Translation modal
   const [translateOpen, setTranslateOpen] = useState(false)
@@ -369,7 +378,84 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, card])
 
+  // ── Relations ──
+  const relations = card._relations || []
+
+  const removeRelation = (targetId) => {
+    setCards(prev => prev.map(c => {
+      if (c._id === id) return { ...c, _relations: (c._relations || []).filter(r => r.targetId !== targetId) }
+      if (c._id === targetId) return { ...c, _relations: (c._relations || []).filter(r => r.targetId !== id) }
+      return c
+    }))
+    addToast('Relación eliminada', 'info')
+  }
+
+  const addRelation = async () => {
+    if (!relTarget) { addToast('Selecciona una tarjeta', 'error'); return }
+    const target = cards.find(c => c._id === relTarget)
+    if (!target) return
+    const type = relType.trim() || 'relación'
+    const note = relNote.trim()
+
+    // Relación bidireccional
+    setCards(prev => prev.map(c => {
+      if (c._id === id) return { ...c, _relations: [...(c._relations || []).filter(r => r.targetId !== relTarget), { targetId: relTarget, name: target.data?.name || 'Personaje', type, note }] }
+      if (c._id === relTarget) return { ...c, _relations: [...(c._relations || []).filter(r => r.targetId !== id), { targetId: id, name: card.data?.name || 'Personaje', type, note }] }
+      return c
+    }))
+
+    if (relApplyAI) {
+      await applyRelationWithAI(target, type, note)
+    } else {
+      addToast('Relación añadida', 'success')
+    }
+    setRelAddOpen(false)
+    setRelTarget(''); setRelType(''); setRelNote(''); setRelApplyAI(false)
+  }
+
+  // Ajusta esta tarjeta con IA para reflejar una relación, según el preset elegido.
+  const applyRelationWithAI = async (target, type, note) => {
+    if (!settings?.apiKey) { addToast('Configura tu API key para ajustar con IA', 'error'); return }
+    const preset = presets.find(p => p.id === relPresetId)
+    setRelBusy(true)
+    try {
+      const sys = `${CARD_EDIT_PROMPT}\n\n${preset ? `Estilo/preset a tener en cuenta:\n${preset.systemPrompt}` : ''}`
+      const userMsg = `Ajusta LIGERAMENTE la tarjeta actual para reflejar de forma coherente esta relación con otro personaje del universo. No reescribas todo: introduce guiños, coherencia de mundo y matices acordes.
+
+RELACIÓN: ${card.data?.name} es ${type} de ${target.data?.name}.${note ? ` Nota: ${note}` : ''}
+
+DATOS DEL OTRO PERSONAJE (${target.data?.name}):
+${JSON.stringify(target.data, null, 2)}
+
+TARJETA ACTUAL A AJUSTAR (${card.data?.name}):
+${JSON.stringify(card.data, null, 2)}`
+
+      const full = await streamChat({
+        settings,
+        messages: [{ role: 'system', content: sys }, { role: 'user', content: userMsg }]
+      })
+      const parsed = extractTranslatedCard(full)
+      if (parsed) {
+        const allowed = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes', 'system_prompt', 'post_history_instructions', 'alternate_greetings', 'tags', 'creator', 'character_version']
+        const newData = { ...card.data }
+        allowed.forEach(k => { if (parsed[k] !== undefined) newData[k] = parsed[k] })
+        setCards(prev => prev.map(c => c._id === id ? { ...c, _updatedAt: new Date().toISOString(), data: newData } : c))
+        setFlashFields(true)
+        setTimeout(() => setFlashFields(false), 700)
+        addToast('Relación añadida y tarjeta ajustada con IA', 'success')
+      } else {
+        addToast('Relación añadida (la IA no devolvió cambios aplicables)', 'info')
+      }
+    } catch (err) {
+      addToast(`Relación añadida, pero falló el ajuste IA: ${err.message}`, 'error')
+    } finally {
+      setRelBusy(false)
+    }
+  }
+
   const flashClass = flashFields ? 'field-updated' : ''
+  const meta = card._meta || {}
+  const relatableCards = cards.filter(c => c._id !== id && !relations.some(r => r.targetId === c._id))
 
   return (
     <div className="card-preview-page" style={aiEditOpen ? { maxWidth: 'none' } : undefined}>
@@ -423,6 +509,56 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
           Prompt de imagen (Stable Diffusion)
         </button>
       </div>
+
+      {/* Relations (shared universe) */}
+      <div className="relations-section">
+        <div className="relations-header">
+          <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-1)' }}>🌐 Relaciones de universo</span>
+          <button className="btn btn-secondary btn-sm" onClick={() => { setRelTarget(''); setRelType(''); setRelNote(''); setRelApplyAI(false); setRelAddOpen(true) }} disabled={relatableCards.length === 0}>
+            + Añadir relación
+          </button>
+        </div>
+        {relations.length === 0 ? (
+          <div className="text-muted" style={{ fontSize: '13px' }}>
+            {relatableCards.length === 0 && cards.length <= 1
+              ? 'Crea más tarjetas para poder relacionarlas entre sí.'
+              : 'Sin relaciones. Vincula este personaje con otros del universo (familiar, rival, pareja, mismo mundo…).'}
+          </div>
+        ) : (
+          <div className="relations-list">
+            {relations.map(r => {
+              const exists = cards.some(c => c._id === r.targetId)
+              return (
+                <div key={r.targetId} className="relation-item">
+                  <span className="relation-type">{r.type}</span>
+                  <span className="relation-name" onClick={() => exists && navigate(`/card/${r.targetId}`)} title={exists ? 'Abrir tarjeta' : 'Tarjeta eliminada'} style={{ opacity: exists ? 1 : 0.5 }}>
+                    {r.name}{!exists && ' (eliminada)'}
+                  </span>
+                  {r.note && <span className="relation-note">— {r.note}</span>}
+                  <button className="btn btn-ghost btn-sm btn-icon" style={{ marginLeft: 'auto' }} title="Quitar relación" onClick={() => removeRelation(r.targetId)}>✕</button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Creation details */}
+      {(meta.model || meta.provider || meta.presetName || meta.mode) && (
+        <div className="relations-section">
+          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-1)', marginBottom: '12px' }}>🛠️ Detalles de creación</div>
+          <div className="creation-details">
+            {meta.provider && <Detail label="Distribuidor" value={meta.provider} />}
+            {meta.model && <Detail label="Modelo" value={meta.model} />}
+            {meta.mode && <Detail label="Modo" value={meta.mode === 'cowork' ? 'Co-work' : meta.mode === 'translation' ? 'Traducción' : meta.mode === 'import' ? 'Importada' : 'Chat'} />}
+            {meta.presetName && <Detail label="Preset" value={meta.presetName} />}
+            {meta.temperature !== null && meta.temperature !== undefined && <Detail label="Temperature" value={String(meta.temperature)} />}
+            {meta.sharedUniverse && <Detail label="Universo compartido" value={meta.sharedUniverse === 'manual' ? 'Manual' : 'Automático'} />}
+            <Detail label="Creada" value={formatDate(card._createdAt)} />
+            {card._updatedAt && card._updatedAt !== card._createdAt && <Detail label="Editada" value={formatDate(card._updatedAt)} />}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', background: 'var(--bg-2)', padding: '4px', borderRadius: 'var(--radius-md)', width: 'fit-content' }}>
@@ -714,6 +850,75 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
         </div>
       )}
 
+      {/* ── Add relation modal ── */}
+      {relAddOpen && (
+        <div className="modal-overlay" onClick={() => !relBusy && setRelAddOpen(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">🌐 Añadir relación</span>
+              <button className="modal-close" onClick={() => !relBusy && setRelAddOpen(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Tarjeta relacionada *</label>
+                <select className="form-select" value={relTarget} onChange={e => setRelTarget(e.target.value)}>
+                  <option value="">Selecciona una tarjeta...</option>
+                  {relatableCards.map(c => <option key={c._id} value={c._id}>{c.data?.name || 'Sin nombre'}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Tipo de relación</label>
+                <input className="form-input" placeholder="hermana, rival, pareja, mentor, mismo mundo..." value={relType} onChange={e => setRelType(e.target.value)} list="rel-types" />
+                <datalist id="rel-types">
+                  <option value="hermana" /><option value="hermano" /><option value="madre" /><option value="padre" />
+                  <option value="hija" /><option value="hijo" /><option value="pareja" /><option value="amiga" />
+                  <option value="amigo" /><option value="rival" /><option value="enemiga" /><option value="enemigo" />
+                  <option value="mentor" /><option value="aprendiz" /><option value="mismo mundo" />
+                </datalist>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nota (opcional)</label>
+                <textarea className="form-textarea" style={{ minHeight: '60px' }} placeholder="Detalles del vínculo..." value={relNote} onChange={e => setRelNote(e.target.value)} />
+              </div>
+
+              <div className="switch-row" style={{ borderTop: '1px solid var(--border-1)', paddingTop: '16px' }}>
+                <div className="switch-info">
+                  <div className="switch-info-title">Ajustar esta tarjeta con IA</div>
+                  <div className="switch-info-desc">La IA modificará ligeramente este personaje para reflejar la relación, según el preset elegido.</div>
+                </div>
+                <label className="switch">
+                  <input type="checkbox" checked={relApplyAI} disabled={relBusy} onChange={e => setRelApplyAI(e.target.checked)} />
+                  <span className="switch-slider" />
+                </label>
+              </div>
+
+              {relApplyAI && (
+                <div className="form-group">
+                  <label className="form-label">Preset para el ajuste</label>
+                  <select className="form-select" value={relPresetId} onChange={e => setRelPresetId(e.target.value)}>
+                    {presets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {relBusy && (
+                <div style={{ marginTop: '4px' }}>
+                  <span className="skeleton skeleton-line skeleton-w-100" />
+                  <span className="skeleton skeleton-line skeleton-w-90" />
+                  <span className="skeleton skeleton-line skeleton-w-55" />
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => !relBusy && setRelAddOpen(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={addRelation} disabled={relBusy || !relTarget}>
+                {relBusy ? '⏳ Ajustando...' : (relApplyAI ? 'Añadir y ajustar con IA' : 'Añadir relación')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toasts */}
       <div className="toast-container">
         {toasts.map(t => (
@@ -722,6 +927,15 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function Detail({ label, value }) {
+  return (
+    <div className="creation-detail">
+      <div className="creation-detail-label">{label}</div>
+      <div className="creation-detail-value">{value}</div>
     </div>
   )
 }

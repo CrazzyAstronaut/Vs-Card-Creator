@@ -1659,6 +1659,195 @@ html, body, #root {
   cursor: not-allowed;
 }
 
+/* ── Shared universe controls ── */
+.su-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-2);
+  background: var(--bg-2);
+}
+
+.su-toggle .switch { width: 38px; height: 21px; }
+.su-toggle .switch-slider::before { height: 15px; width: 15px; }
+.su-toggle .switch input:checked + .switch-slider::before { transform: translateX(17px); }
+
+.su-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.su-mini-toggle {
+  display: flex;
+  background: var(--bg-1);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.su-mini-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: var(--text-3);
+  transition: all var(--transition);
+}
+
+.su-mini-btn.active { background: var(--bg-4); color: var(--accent-4); }
+
+/* ── Card picker (modal list) ── */
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-2);
+  background: var(--bg-3);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.picker-item:hover { border-color: var(--border-3); }
+.picker-item.selected { border-color: var(--accent-3); box-shadow: inset 0 0 0 1px var(--accent-glow); }
+
+.picker-check {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #fff;
+}
+
+.picker-item.selected .picker-check {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+
+.picker-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+/* ── Relations ── */
+.relations-section {
+  background: var(--bg-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.relations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.relations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.relation-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-3);
+  border: 1px solid var(--border-1);
+}
+
+.relation-type {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-4);
+  flex-shrink: 0;
+}
+
+.relation-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  cursor: pointer;
+}
+
+.relation-name:hover { color: var(--accent-4); text-decoration: underline; }
+
+.relation-note {
+  font-size: 12px;
+  color: var(--text-3);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creation-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.creation-detail {
+  background: var(--bg-3);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+}
+
+.creation-detail-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-4);
+}
+
+.creation-detail-value {
+  font-size: 13px;
+  color: var(--text-1);
+  font-weight: 600;
+  margin-top: 2px;
+  word-break: break-word;
+}
+
 /* ── Divider ── */
 .divider {
   height: 1px;
