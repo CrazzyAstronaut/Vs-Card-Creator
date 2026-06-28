@@ -1,0 +1,205 @@
+# ✦ V's Card Creator
+
+Herramienta web para crear tarjetas de personaje para **SillyTavern** con asistencia de IA, compatible con el formato **Character Card Spec V2**.
+
+![Dashboard](https://img.shields.io/badge/stack-React%20%2B%20Vite%20%2B%20Express-8b5cf6?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)
+
+---
+
+## Características
+
+- **Chat con IA** — Describe tu personaje y la IA genera la tarjeta completa en formato ST V2 (JSON listo para importar en SillyTavern)
+- **Modo Co-work** — La IA hace preguntas guiadas para construir el personaje paso a paso (ideal para modelos de razonamiento)
+- **Soporte thinking** — Muestra el razonamiento interno de modelos como DeepSeek R1, compatible con campos `reasoning_content` y etiquetas `<think>`
+- **Sistema de presets** — Guarda, edita y selecciona prompts de sistema personalizados para distintos estilos de personajes
+- **Dashboard** — Visualiza, busca, filtra y descarga todas tus tarjetas creadas
+- **Importación** — Importa tarjetas ST existentes (JSON) mediante drag & drop o selector de archivo
+- **Editor de campos** — Edita cualquier campo de la tarjeta directamente en la aplicación
+- **API compatible con OpenAI** — Funciona con cualquier proveedor compatible: nano-gpt, OpenAI, OpenRouter, Ollama local, etc.
+- **Sin hardcodeo** — La API key se guarda en localStorage del navegador, nunca en el código ni en el servidor
+
+---
+
+## Requisitos
+
+- **Node.js 18+** (incluye `fetch` nativo)
+- Una API key de cualquier proveedor compatible con OpenAI Chat Completions
+
+---
+
+## Instalación
+
+```bash
+# 1. Clona el repositorio
+git clone https://github.com/CrazzyAstronaut/Vs-Card-Creator.git
+cd Vs-Card-Creator
+
+# 2. Instala las dependencias
+npm install
+
+# 3. (Opcional) Copia el archivo de ejemplo de variables de entorno
+cp .env.example .env
+```
+
+---
+
+## Uso en desarrollo
+
+```bash
+npm run dev
+```
+
+Esto levanta dos servidores:
+- **Frontend (Vite):** `http://localhost:5173`
+- **Backend (Express):** `http://localhost:3001`
+
+Abre `http://localhost:5173` en tu navegador.
+
+---
+
+## Uso en producción
+
+```bash
+# 1. Construye el frontend
+npm run build
+
+# 2. Inicia el servidor (sirve el frontend + API)
+npm start
+```
+
+El servidor estará disponible en `http://localhost:3001` (o el puerto configurado en `.env`).
+
+---
+
+## Configuración de la API
+
+1. Ve a **Configuración** en la barra lateral
+2. Ingresa tu **API Key** del proveedor de IA
+3. Ingresa la **Base URL** (endpoint compatible con OpenAI)
+4. Selecciona o escribe el **modelo** que quieres usar
+5. Haz clic en **"Probar conexión"** para verificar que todo funcione
+
+### Ejemplos de proveedores
+
+| Proveedor | Base URL | Notas |
+|-----------|----------|-------|
+| [nano-gpt](https://nano-gpt.com) | `https://api.nano-gpt.com/v1` | Soporte DeepSeek R1, GPT-4o, etc. |
+| [OpenAI](https://platform.openai.com) | `https://api.openai.com/v1` | GPT-4o, o1-preview, etc. |
+| [OpenRouter](https://openrouter.ai) | `https://openrouter.ai/api/v1` | Acceso a cientos de modelos |
+| [Ollama local](https://ollama.com) | `http://localhost:11434/v1` | Modelos locales gratuitos |
+
+---
+
+## Creación de tarjetas
+
+### Modo Chat
+1. Selecciona un **preset** (prompt de sistema)
+2. Escribe la descripción del personaje en el chat
+3. La IA genera la tarjeta en formato JSON
+4. La tarjeta aparece en el panel derecho para revisión
+5. Haz clic en **"Guardar tarjeta"** para añadirla al dashboard
+
+### Modo Co-work
+1. Selecciona el modo **Co-work** en el selector de modo
+2. Haz clic en **"Iniciar Co-work"**
+3. La IA te hará preguntas guiadas sobre tu personaje
+4. Responde con tantos detalles como quieras
+5. La IA generará la tarjeta automáticamente cuando tenga suficiente información
+6. También puedes forzar la generación con el botón **"⚡ Generar ahora"**
+
+---
+
+## Formato de salida (ST Character Card V2)
+
+Las tarjetas se exportan como archivos `.json` con la siguiente estructura:
+
+```json
+{
+  "spec": "chara_card_v2",
+  "spec_version": "2.0",
+  "data": {
+    "name": "Nombre del personaje",
+    "description": "Descripción detallada...",
+    "personality": "Rasgos de personalidad...",
+    "scenario": "Escenario inicial...",
+    "first_mes": "Primer mensaje del personaje...",
+    "mes_example": "<START>\n{{user}}: ...\n{{char}}: ...",
+    "creator_notes": "Notas del creador...",
+    "system_prompt": "",
+    "post_history_instructions": "",
+    "alternate_greetings": ["Saludo alternativo 1", "..."],
+    "tags": ["tag1", "tag2"],
+    "creator": "Tu nombre",
+    "character_version": "1.0",
+    "extensions": {}
+  }
+}
+```
+
+Para importar en SillyTavern: Panel de personajes → Importar → selecciona el archivo `.json`.
+
+---
+
+## Presets
+
+Los presets son prompts de sistema que guían a la IA en la creación de tarjetas. La aplicación incluye 4 presets predeterminados:
+
+- **Creación Estándar** — Tarjetas detalladas y completas
+- **Co-work Colaborativo** — Para el modo de preguntas guiadas
+- **Personaje Anime/Manga** — Especializado en tropos del género
+- **Personaje RPG/Fantasía** — Ideal para NPCs y personajes de mundo fantástico
+
+Puedes crear, editar, duplicar y eliminar tus propios presets desde la sección **Presets**.
+
+---
+
+## Estructura del proyecto
+
+```
+Vs-Card-Creator/
+├── src/                    # Frontend (React + Vite)
+│   ├── components/
+│   │   ├── Dashboard.jsx   # Panel principal de tarjetas
+│   │   ├── ChatCreate.jsx  # Interfaz de creación con IA
+│   │   ├── CardPreview.jsx # Vista y editor de tarjeta
+│   │   ├── PresetManager.jsx # Gestión de presets
+│   │   ├── Settings.jsx    # Configuración
+│   │   └── Sidebar.jsx     # Navegación lateral
+│   ├── hooks/
+│   │   └── useLocalStorage.js
+│   ├── utils/
+│   │   ├── cardSchema.js   # Utilidades del formato ST
+│   │   └── defaultPresets.js
+│   └── App.jsx
+├── server/
+│   └── index.js            # Express API proxy (evita CORS)
+├── .env.example
+├── .gitignore
+└── package.json
+```
+
+---
+
+## Seguridad
+
+- La **API key nunca se hardcodea** ni se sube al repositorio
+- El servidor Express actúa como proxy para evitar exponer la API key directamente al navegador en peticiones cross-origin
+- Los datos (tarjetas, presets, configuración) se guardan únicamente en el **localStorage** de tu navegador
+- El archivo `.env` está en `.gitignore` para evitar subidas accidentales
+
+---
+
+## Stack técnico
+
+- **Frontend:** React 18, React Router v6, Vite 5
+- **Backend:** Node.js, Express 4
+- **Estilos:** CSS custom properties (sin frameworks)
+- **Almacenamiento:** localStorage (cliente)
+- **Comunicación IA:** OpenAI-compatible Chat Completions con streaming SSE
+
+---
+
+## Licencia
+
+MIT — úsalo libremente para crear tus personajes ✦
