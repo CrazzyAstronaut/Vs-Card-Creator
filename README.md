@@ -184,6 +184,20 @@ Los presets son prompts de sistema que guían a la IA en la creación de tarjeta
 
 Puedes crear, editar, duplicar y eliminar tus propios presets desde la sección **Presets**.
 
+### Crear presets con IA
+
+Al crear un nuevo preset (o editar uno existente), pulsa el botón **"✨ Crear con IA"** en la
+cabecera del editor. Se despliega un panel de chat a la derecha donde puedes describir libremente
+qué tipo de preset quieres. La IA:
+
+- Responde de forma conversacional en cada mensaje (una respuesta por turno)
+- Rellena automáticamente los campos **Nombre**, **Descripción** y **System Prompt** en la vista
+  previa de la izquierda
+- Compara el estado actual de los campos con lo que pides para ir ajustándolo en cada turno
+- Muestra una **animación de skeleton** mientras genera la respuesta
+
+Puedes seguir conversando para refinar el preset y, cuando estés conforme, pulsar **"Crear preset"**.
+
 ---
 
 ## Estructura del proyecto

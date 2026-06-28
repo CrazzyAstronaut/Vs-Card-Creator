@@ -111,6 +111,38 @@ export function downloadCard(card) {
   URL.revokeObjectURL(url)
 }
 
+// ── Preset AI assistant helpers ──
+// El asistente devuelve el preset entre marcadores propios (no usamos ```json
+// porque el system_prompt generado puede contener bloques de código que romperían
+// el parseo anidado).
+export function extractPresetFromText(text) {
+  const m = text.match(/<<<PRESET_JSON>>>([\s\S]*?)<<<END_PRESET_JSON>>>/)
+  if (!m) return null
+  try {
+    const parsed = JSON.parse(m[1].trim())
+    const p = parsed.preset || parsed
+    return {
+      name: p.name || '',
+      description: p.description || '',
+      systemPrompt: p.system_prompt || p.systemPrompt || ''
+    }
+  } catch {
+    return null
+  }
+}
+
+// Quita los marcadores del preset del texto conversacional mostrado en el chat,
+// incluyendo un marcador de apertura parcial mientras se está transmitiendo.
+export function stripPresetMarkers(text) {
+  let t = text.replace(/<<<PRESET_JSON>>>[\s\S]*?<<<END_PRESET_JSON>>>/g, '')
+  const open = t.indexOf('<<<PRESET_JSON>>>')
+  if (open !== -1) t = t.slice(0, open)
+  // Marcador de apertura aún incompleto (p.ej. "<<<PRES")
+  const partial = t.match(/<<<[A-Z_]*$/)
+  if (partial) t = t.slice(0, partial.index)
+  return t.trim()
+}
+
 export function parseThinkingContent(content) {
   const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/s)
   if (thinkMatch) {
