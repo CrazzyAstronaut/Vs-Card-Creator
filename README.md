@@ -22,6 +22,7 @@ Herramienta web para crear tarjetas de personaje para **SillyTavern** con asiste
 - **Universo compartido** — Crea personajes relacionados entre sí (familiares, rivales, mismo mundo) con modo automático o manual
 - **Relaciones entre tarjetas** — Vincula personajes y deja que la IA ajuste una tarjeta para reflejar la relación, según el preset
 - **Detalles de creación** — Cada tarjeta registra cómo se creó (modelo, distribuidor, preset, modo, temperature, universo)
+- **Tarjetas multi-personaje** — Fusiona varias tarjetas en una sola con un narrador en tercera persona como `{{char}}`
 - **API compatible con OpenAI** — Funciona con cualquier proveedor compatible: nano-gpt, OpenAI, OpenRouter, Ollama local, etc.
 - **Carga dinámica de modelos** — Obtén la lista de modelos directamente desde la API, con un switch **"Solo suscripción"** que filtra a los modelos incluidos en la suscripción de nanogpt
 - **Sin hardcodeo** — La API key se guarda en localStorage del navegador, nunca en el código ni en el servidor
@@ -147,6 +148,26 @@ la lista completa. La lógica de resolución del endpoint está en `server/index
 6. También puedes forzar la generación con el botón **"⚡ Generar ahora"**
 
 ---
+
+## Tarjetas multi-personaje
+
+Permite fusionar varios personajes en **una sola tarjeta** para roleplay grupal, con un **narrador en
+tercera persona** como `{{char}}`.
+
+**Flujo:**
+1. En el dashboard pulsa **"Multi-personaje"** para entrar en modo de selección.
+2. Marca las tarjetas que quieras fusionar (mínimo 2) y pulsa **"Crear multi-personaje"**.
+3. Se abre un chat donde **introduces el objetivo del relato** (a qué quieres llegar con la historia).
+4. La IA:
+   - Sustituye los `{{char}}` de cada personaje por su **nombre** respectivo.
+   - Crea un nuevo `{{char}}` como **narrador en tercera persona**.
+   - Genera una tarjeta cuya `description` empieza con un bloque de instrucciones del narrador, luego
+     un bloque con la trama (tu objetivo) y después una sección por personaje
+     (*"The first of the girls is …"*).
+5. Revisa la tarjeta, refínala por chat si quieres, y guárdala o descárgala como `.json`.
+
+La tarjeta resultante queda relacionada con sus personajes miembros (y viceversa) y registra el modo
+de creación `multi` en sus detalles.
 
 ## Universo compartido
 
@@ -294,7 +315,8 @@ Vs-Card-Creator/
 ├── src/                    # Frontend (React + Vite)
 │   ├── components/
 │   │   ├── Dashboard.jsx   # Panel principal de tarjetas
-│   │   ├── ChatCreate.jsx  # Interfaz de creación con IA
+│   │   ├── ChatCreate.jsx  # Interfaz de creación con IA (+ universo compartido)
+│   │   ├── MultiCharacterCreate.jsx # Fusión de varias tarjetas en una
 │   │   ├── CardPreview.jsx # Vista y editor de tarjeta
 │   │   ├── PresetManager.jsx # Gestión de presets de texto (+ asistente IA)
 │   │   ├── ImagePresetManager.jsx # Gestión de presets de imagen (SD)

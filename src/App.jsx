@@ -5,6 +5,7 @@ import ChatCreate from './components/ChatCreate.jsx'
 import CardPreview from './components/CardPreview.jsx'
 import PresetManager from './components/PresetManager.jsx'
 import ImagePresetManager from './components/ImagePresetManager.jsx'
+import MultiCharacterCreate from './components/MultiCharacterCreate.jsx'
 import Settings from './components/Settings.jsx'
 import { useLocalStorage } from './hooks/useLocalStorage.js'
 import { DEFAULT_SETTINGS } from './utils/cardSchema.js'
@@ -27,6 +28,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard {...sharedProps} />} />
             <Route path="/create" element={<ChatCreate {...sharedProps} />} />
+            <Route path="/multi" element={<MultiCharacterCreate {...sharedProps} />} />
             <Route path="/card/:id" element={<CardPreview {...sharedProps} />} />
             <Route path="/presets" element={<PresetManager {...sharedProps} />} />
             <Route path="/image-presets" element={<ImagePresetManager {...sharedProps} />} />

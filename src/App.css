@@ -1702,6 +1702,36 @@ html, body, #root {
 
 .su-mini-btn.active { background: var(--bg-4); color: var(--accent-4); }
 
+/* ── Multi-select floating bar ── */
+.multi-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-left: calc(var(--sidebar-width) / 2);
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 20px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-3);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  z-index: 500;
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+  to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.multi-bar-info {
+  font-size: 14px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
 /* ── Card picker (modal list) ── */
 .picker-list {
   display: flex;

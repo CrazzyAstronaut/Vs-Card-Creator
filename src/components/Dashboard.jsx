@@ -19,7 +19,20 @@ export default function Dashboard({ cards, setCards, settings }) {
   const [search, setSearch] = useState('')
   const [activeTag, setActiveTag] = useState(null)
   const [toasts, setToasts] = useState([])
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState([])
   const fileRef = useRef()
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const exitSelectMode = () => { setSelectMode(false); setSelectedIds([]) }
+
+  const startMulti = () => {
+    if (selectedIds.length < 2) { addToast('Selecciona al menos 2 tarjetas', 'error'); return }
+    navigate('/multi', { state: { ids: selectedIds } })
+  }
 
   const addToast = (msg, type = 'info') => {
     const id = Date.now()
@@ -120,6 +133,14 @@ export default function Dashboard({ cards, setCards, settings }) {
           <p className="page-subtitle">Gestiona y descarga tus personajes de SillyTavern</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
+          {selectMode ? (
+            <button className="btn btn-ghost btn-sm" onClick={exitSelectMode}>Cancelar selección</button>
+          ) : (
+            <button className="btn btn-secondary btn-sm" onClick={() => setSelectMode(true)} disabled={cards.length < 2} title={cards.length < 2 ? 'Necesitas al menos 2 tarjetas' : 'Fusionar varias tarjetas en una'}>
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Multi-personaje
+            </button>
+          )}
           <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Importar JSON
@@ -209,13 +230,31 @@ export default function Dashboard({ cards, setCards, settings }) {
             <CharCard
               key={card._id}
               card={card}
-              onClick={() => navigate(`/card/${card._id}`)}
+              selectMode={selectMode}
+              selected={selectedIds.includes(card._id)}
+              onClick={() => selectMode ? toggleSelect(card._id) : navigate(`/card/${card._id}`)}
               onEditAi={(e) => { e.stopPropagation(); navigate(`/card/${card._id}?panel=edit`) }}
               onSdPrompt={(e) => { e.stopPropagation(); navigate(`/card/${card._id}?panel=sd`) }}
               onDownload={(e) => { e.stopPropagation(); downloadCard(card) }}
               onDelete={(e) => deleteCard(card._id, e)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Multi-select floating bar */}
+      {selectMode && (
+        <div className="multi-bar">
+          <span className="multi-bar-info">
+            <strong>{selectedIds.length}</strong> tarjeta{selectedIds.length !== 1 ? 's' : ''} seleccionada{selectedIds.length !== 1 ? 's' : ''}
+          </span>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button className="btn btn-ghost btn-sm" onClick={exitSelectMode}>Cancelar</button>
+            <button className="btn btn-primary btn-sm" onClick={startMulti} disabled={selectedIds.length < 2}>
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Crear multi-personaje
+            </button>
+          </div>
         </div>
       )}
 
@@ -231,7 +270,7 @@ export default function Dashboard({ cards, setCards, settings }) {
   )
 }
 
-function CharCard({ card, onClick, onDownload, onDelete, onEditAi, onSdPrompt }) {
+function CharCard({ card, onClick, onDownload, onDelete, onEditAi, onSdPrompt, selectMode, selected }) {
   const name = card.data?.name || 'Sin nombre'
   const desc = card.data?.description || card.data?.personality || ''
   const tags = (card.data?.tags || []).slice(0, 4)
@@ -239,7 +278,12 @@ function CharCard({ card, onClick, onDownload, onDelete, onEditAi, onSdPrompt })
   const date = formatDate(card._createdAt)
 
   return (
-    <div className="char-card" onClick={onClick}>
+    <div className={`char-card ${selectMode && selected ? 'selected' : ''}`} onClick={onClick} style={selectMode ? { borderColor: selected ? 'var(--accent-3)' : undefined } : undefined}>
+      {selectMode && (
+        <div className="picker-check" style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 2, background: selected ? 'var(--accent-2)' : 'var(--bg-3)', borderColor: selected ? 'var(--accent-2)' : 'var(--border-3)' }}>
+          {selected ? '✓' : ''}
+        </div>
+      )}
       <div className="char-card-header">
         <div className="char-avatar">{initial}</div>
         <div className="char-card-info">
@@ -259,6 +303,13 @@ function CharCard({ card, onClick, onDownload, onDelete, onEditAi, onSdPrompt })
 
       {desc && <p className="char-card-desc">{desc}</p>}
 
+      {selectMode ? (
+        <div className="char-card-actions">
+          <button className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-secondary'}`} style={{ flex: 1 }} onClick={onClick}>
+            {selected ? '✓ Seleccionada' : 'Seleccionar'}
+          </button>
+        </div>
+      ) : (
       <div className="char-card-actions">
         <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={e => { e.stopPropagation(); onClick() }}>
           Ver
@@ -276,6 +327,7 @@ function CharCard({ card, onClick, onDownload, onDelete, onEditAi, onSdPrompt })
           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
         </button>
       </div>
+      )}
     </div>
   )
 }

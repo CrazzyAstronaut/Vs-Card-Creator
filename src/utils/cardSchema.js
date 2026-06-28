@@ -203,6 +203,28 @@ export function detectMentionedCards(text, cards) {
   })
 }
 
+// ── Multi-character helpers ──
+// Sustituye {{char}} por el nombre del personaje (para fusionar varias tarjetas).
+export function substituteCharName(text, name) {
+  if (!text) return text
+  return String(text).replace(/\{\{char\}\}/gi, name)
+}
+
+// Perfil de un personaje con {{char}} ya reemplazado por su nombre.
+export function buildCharacterProfile(card) {
+  const d = card.data || {}
+  const name = d.name || 'Personaje'
+  const sub = (t) => substituteCharName(t, name)
+  const parts = [`### ${name}`]
+  if (d.description) parts.push(`Descripción: ${sub(d.description)}`)
+  if (d.personality) parts.push(`Personalidad: ${sub(d.personality)}`)
+  if (d.scenario) parts.push(`Escenario: ${sub(d.scenario)}`)
+  if (d.first_mes) parts.push(`Saludo inicial: ${sub(d.first_mes)}`)
+  if (d.mes_example) parts.push(`Ejemplos de diálogo: ${sub(d.mes_example)}`)
+  if (Array.isArray(d.tags) && d.tags.length) parts.push(`Etiquetas: ${d.tags.join(', ')}`)
+  return parts.join('\n')
+}
+
 // ── Translation helper ──
 // La traducción vuelve entre marcadores propios para no chocar con bloques de
 // código que pudieran aparecer en mes_example.
