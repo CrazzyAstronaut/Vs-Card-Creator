@@ -29,6 +29,25 @@ Herramienta web para crear tarjetas de personaje para **SillyTavern** con asiste
 
 ---
 
+## Sincronización entre dispositivos
+
+Las tarjetas, presets, presets de imagen y ajustes (incluida la API key) se guardan **en el
+servidor** (`data/store.json`, ignorado por git), además de en el navegador. Así se **comparten
+automáticamente** entre todos los dispositivos que abran la app contra el mismo servidor (PC por
+`localhost`, móvil por la IP de Tailscale, etc.).
+
+- Al cargar, la app fusiona los datos del servidor con los locales (unión por id; no se pierde nada).
+- Cada cambio se guarda en el servidor automáticamente.
+- En **Configuración → Gestión de datos** tienes **"Copia de seguridad completa"** (exportar/importar
+  todo en un `.json`) para migrar datos antiguos o respaldarlos.
+
+> Como `localStorage` es independiente por dirección y por dispositivo, los datos creados antes de
+> tener sincronización solo están en el navegador/dirección donde se crearon. Ábrelos ahí y se
+> subirán al servidor (o usa la copia de seguridad completa para traerlos).
+
+> Nota de seguridad: la API key se guarda en `data/store.json` en el servidor (no se sube a git).
+> Es adecuado para un uso personal autoalojado en tu propia red de Tailscale.
+
 ## Inicio rápido (un solo clic)
 
 En **Windows**, haz **doble clic en `Iniciar.bat`**. El script instala las dependencias la primera

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { mergeByKey, mergeSettings } from './utils/sync.js'
 import Sidebar from './components/Sidebar.jsx'
 import Dashboard from './components/Dashboard.jsx'
 import ChatCreate from './components/ChatCreate.jsx'
@@ -20,6 +21,44 @@ export default function App() {
   const [imagePresets, setImagePresets] = useLocalStorage('vcc_image_presets', DEFAULT_IMAGE_PRESETS)
 
   const [menuOpen, setMenuOpen] = useState(false)
+  const [synced, setSynced] = useState(false)
+
+  // Al cargar: traer datos del servidor y fusionarlos con los locales.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/data')
+        if (res.ok) {
+          const data = await res.json()
+          if (!cancelled && data && (data.cards?.length || data.presets?.length || data.imagePresets?.length || data.settings)) {
+            if (Array.isArray(data.cards)) setCards(prev => mergeByKey(prev, data.cards, '_id', ['_updatedAt', '_createdAt']))
+            if (Array.isArray(data.presets) && data.presets.length) setPresets(prev => mergeByKey(prev, data.presets, 'id', ['createdAt']))
+            if (Array.isArray(data.imagePresets) && data.imagePresets.length) setImagePresets(prev => mergeByKey(prev, data.imagePresets, 'id', ['createdAt']))
+            if (data.settings && Object.keys(data.settings).length) setSettings(prev => mergeSettings(prev, data.settings))
+          }
+        }
+      } catch {
+        // Sin servidor: se sigue usando solo localStorage
+      } finally {
+        if (!cancelled) setSynced(true)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // Al cambiar: guardar en el servidor (con pequeño debounce).
+  useEffect(() => {
+    if (!synced) return
+    const t = setTimeout(() => {
+      fetch('/api/data', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cards, presets, imagePresets, settings })
+      }).catch(() => {})
+    }, 800)
+    return () => clearTimeout(t)
+  }, [synced, cards, presets, imagePresets, settings])
 
   const sharedProps = { settings, setSettings, cards, setCards, presets, setPresets, imagePresets, setImagePresets }
 

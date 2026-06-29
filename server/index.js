@@ -2,12 +2,17 @@ import express from 'express'
 import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { readFile, writeFile, mkdir } from 'fs/promises'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const app = express()
 const PORT = process.env.PORT || 3001
+
+// Almacenamiento persistente compartido (para acceso desde varios dispositivos)
+const DATA_DIR = join(__dirname, '..', 'data')
+const DATA_FILE = join(DATA_DIR, 'store.json')
 
 app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173'] }))
 app.use(express.json({ limit: '10mb' }))
@@ -138,6 +143,36 @@ app.post('/api/models', async (req, res) => {
   } catch (err) {
     console.error('[Models Proxy Error]', err.message)
     res.status(500).json({ error: err.message || 'Error interno del servidor' })
+  }
+})
+
+// Persistencia compartida: GET devuelve el almacen, PUT lo reemplaza.
+app.get('/api/data', async (_req, res) => {
+  try {
+    const raw = await readFile(DATA_FILE, 'utf8')
+    res.type('application/json').send(raw)
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.json({})
+    console.error('[Data GET Error]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.put('/api/data', async (req, res) => {
+  try {
+    await mkdir(DATA_DIR, { recursive: true })
+    const payload = {
+      cards: Array.isArray(req.body?.cards) ? req.body.cards : [],
+      presets: Array.isArray(req.body?.presets) ? req.body.presets : [],
+      imagePresets: Array.isArray(req.body?.imagePresets) ? req.body.imagePresets : [],
+      settings: req.body?.settings && typeof req.body.settings === 'object' ? req.body.settings : {},
+      updatedAt: new Date().toISOString()
+    }
+    await writeFile(DATA_FILE, JSON.stringify(payload, null, 2), 'utf8')
+    res.json({ ok: true, updatedAt: payload.updatedAt })
+  } catch (err) {
+    console.error('[Data PUT Error]', err.message)
+    res.status(500).json({ error: err.message })
   }
 })
 

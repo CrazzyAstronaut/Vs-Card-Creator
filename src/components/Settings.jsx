@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { DEFAULT_PRESETS } from '../utils/defaultPresets.js'
+import { mergeByKey, mergeSettings } from '../utils/sync.js'
 
 const PRESET_MODELS = [
   { label: 'DeepSeek R1 (thinking)', value: 'deepseek/deepseek-r1' },
@@ -12,7 +13,8 @@ const PRESET_MODELS = [
   { label: 'Qwen 2.5 72B', value: 'qwen/qwen-2.5-72b-instruct' },
 ]
 
-export default function Settings({ settings, setSettings, cards, setCards, presets, setPresets }) {
+export default function Settings({ settings, setSettings, cards, setCards, presets, setPresets, imagePresets = [], setImagePresets }) {
+  const backupInputRef = useRef(null)
   const [showKey, setShowKey] = useState(false)
   const [testStatus, setTestStatus] = useState(null) // null | 'loading' | 'ok' | 'error'
   const [testMsg, setTestMsg] = useState('')
@@ -135,6 +137,41 @@ export default function Settings({ settings, setSettings, cards, setCards, prese
     a.click()
     URL.revokeObjectURL(url)
     addToast(`${cards.length} tarjetas exportadas`, 'success')
+  }
+
+  // Copia de seguridad COMPLETA (tarjetas + presets + presets de imagen + ajustes)
+  const exportFullBackup = () => {
+    const data = {
+      _type: 'vcc-full-backup',
+      _version: 1,
+      exportedAt: new Date().toISOString(),
+      cards, presets, imagePresets, settings
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `vcc-respaldo-completo-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    addToast('Copia de seguridad completa exportada', 'success')
+  }
+
+  const importFullBackup = async (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      try {
+        const data = JSON.parse(await file.text())
+        if (Array.isArray(data.cards)) setCards(prev => mergeByKey(prev, data.cards, '_id', ['_updatedAt', '_createdAt']))
+        if (Array.isArray(data.presets) && data.presets.length) setPresets(prev => mergeByKey(prev, data.presets, 'id', ['createdAt']))
+        if (Array.isArray(data.imagePresets) && data.imagePresets.length && setImagePresets) setImagePresets(prev => mergeByKey(prev, data.imagePresets, 'id', ['createdAt']))
+        if (data.settings && typeof data.settings === 'object') setSettings(prev => mergeSettings(prev, data.settings))
+        addToast('Copia de seguridad importada y fusionada', 'success')
+      } catch (err) {
+        addToast(`Archivo inválido: ${err.message}`, 'error')
+      }
+    }
+    e.target.value = ''
   }
 
   return (
@@ -345,15 +382,30 @@ export default function Settings({ settings, setSettings, cards, setCards, prese
           <span className="settings-section-title">Gestión de datos</span>
         </div>
         <div className="settings-section-body">
+          <div style={{ fontSize: '12px', color: 'var(--text-3)', background: 'var(--bg-3)', border: '1px solid var(--border-1)', borderRadius: 'var(--radius-md)', padding: '12px 14px', lineHeight: 1.6, marginBottom: '12px' }}>
+            ☁️ <strong>Sincronización entre dispositivos:</strong> tus tarjetas, presets y ajustes se guardan también en el servidor, así se comparten automáticamente entre todos los dispositivos que abran la app (PC, móvil por Tailscale, etc.). Si tus datos antiguos no aparecen aquí, ábrelos en el navegador/dirección donde sí se ven y usa <strong>"Copia de seguridad completa"</strong> para traerlos.
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '14px 16px', background: 'var(--bg-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--accent-glow)' }}>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-1)' }}>Copia de seguridad completa</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-4)', marginTop: '2px' }}>Tarjetas + presets + presets de imagen + ajustes (incluye API key)</div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                <button className="btn btn-secondary btn-sm" onClick={exportFullBackup}>Exportar</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => backupInputRef.current?.click()}>Importar</button>
+                <input ref={backupInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={importFullBackup} />
+              </div>
+            </div>
+
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--bg-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-1)' }}>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-1)' }}>Exportar todas las tarjetas</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-4)', marginTop: '2px' }}>{cards.length} tarjeta{cards.length !== 1 ? 's' : ''} guardada{cards.length !== 1 ? 's' : ''}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-4)', marginTop: '2px' }}>{cards.length} tarjeta{cards.length !== 1 ? 's' : ''} guardada{cards.length !== 1 ? 's' : ''} (solo tarjetas, formato ST)</div>
               </div>
               <button className="btn btn-secondary btn-sm" onClick={exportAllCards}>
                 <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Exportar backup
+                Exportar
               </button>
             </div>
 
