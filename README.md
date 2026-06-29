@@ -31,15 +31,10 @@ Herramienta web para crear tarjetas de personaje para **SillyTavern** con asiste
 
 ## Inicio rápido (un solo clic)
 
-Para arrancar todo sin comandos:
-
-- **Windows:** doble clic en **`Iniciar.bat`** (usa Git Bash para ejecutar `iniciar.bash`).
-- **Linux / macOS / Git Bash:** ejecuta `./iniciar.bash` (o `bash iniciar.bash`).
-
-El script instala las dependencias la primera vez, construye la app, la arranca en
-`http://localhost:3001` y **deja activo el acceso por Tailscale**: muestra la URL por IP de Tailscale
-(`http://100.x.y.z:3001`) y, si es posible, una URL HTTPS del tailnet. Deja la ventana abierta;
-`Ctrl+C` detiene el servidor y limpia la configuración de Tailscale.
+En **Windows**, haz **doble clic en `Iniciar.bat`**. El script instala las dependencias la primera
+vez, construye la app, la arranca en `http://localhost:3001` y **deja activo el acceso por
+Tailscale**: muestra la URL por IP de Tailscale (`http://100.x.y.z:3001`) y activa `tailscale serve`
+si es posible. Deja la ventana abierta; `Ctrl+C` detiene el servidor.
 
 > El acceso por Tailscale requiere tener [Tailscale](https://tailscale.com/download) instalado y la
 > sesión iniciada en este equipo y en el dispositivo desde el que quieras abrir la app.
