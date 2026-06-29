@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { DEFAULT_PRESETS } from '../utils/defaultPresets.js'
 import { mergeByKey, mergeSettings } from '../utils/sync.js'
+import { fileToResizedDataURL } from '../utils/image.js'
 
 const PRESET_MODELS = [
   { label: 'DeepSeek R1 (thinking)', value: 'deepseek/deepseek-r1' },
@@ -15,6 +16,21 @@ const PRESET_MODELS = [
 
 export default function Settings({ settings, setSettings, cards, setCards, presets, setPresets, imagePresets = [], setImagePresets }) {
   const backupInputRef = useRef(null)
+  const userAvatarRef = useRef(null)
+
+  const pickUserAvatar = async (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      try {
+        const dataUrl = await fileToResizedDataURL(file, 256)
+        setSettings(s => ({ ...s, userAvatar: dataUrl }))
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err)
+      }
+    }
+    e.target.value = ''
+  }
   const [showKey, setShowKey] = useState(false)
   const [testStatus, setTestStatus] = useState(null) // null | 'loading' | 'ok' | 'error'
   const [testMsg, setTestMsg] = useState('')
@@ -372,6 +388,23 @@ export default function Settings({ settings, setSettings, cards, setCards, prese
             />
             <span className="form-hint">Se añadirá automáticamente al campo "creator" de cada tarjeta generada.</span>
           </div>
+
+          <div className="form-group">
+            <label className="form-label">Tu avatar (persona)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div className="avatar-upload" onClick={() => userAvatarRef.current?.click()} title="Subir avatar">
+                {settings.userAvatar
+                  ? <img src={settings.userAvatar} alt="" className="avatar-upload-img" />
+                  : <span className="avatar-upload-placeholder">＋</span>}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => userAvatarRef.current?.click()}>Subir avatar</button>
+                {settings.userAvatar && <button className="btn btn-ghost btn-sm" onClick={() => update('userAvatar', '')}>Quitar</button>}
+              </div>
+              <input ref={userAvatarRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickUserAvatar} />
+            </div>
+            <span className="form-hint">Se muestra como tu retrato en el chat al crear tarjetas.</span>
+          </div>
         </div>
       </div>
 
@@ -392,6 +425,29 @@ export default function Settings({ settings, setSettings, cards, setCards, prese
               <span className="switch-slider" />
             </label>
           </div>
+
+          <div className="divider" />
+
+          <div className="switch-row">
+            <div className="switch-info">
+              <div className="switch-info-title">Prompt de imagen automático</div>
+              <div className="switch-info-desc">Al guardar una tarjeta, genera automáticamente su prompt de Stable Diffusion con el preset de imagen elegido.</div>
+            </div>
+            <label className="switch">
+              <input type="checkbox" checked={Boolean(settings.autoImagePrompt)} onChange={e => update('autoImagePrompt', e.target.checked)} />
+              <span className="switch-slider" />
+            </label>
+          </div>
+          {settings.autoImagePrompt && (
+            <div className="form-group" style={{ marginTop: '12px' }}>
+              <label className="form-label">Preset de imagen para el auto-prompt</label>
+              <select className="form-select" value={settings.autoImagePresetId || ''} onChange={e => update('autoImagePresetId', e.target.value)}>
+                <option value="">{imagePresets[0]?.name ? `Por defecto (${imagePresets[0].name})` : 'Sin presets de imagen'}</option>
+                {imagePresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <span className="form-hint">El preset elegido queda fijo y no cambia con el tiempo.</span>
+            </div>
+          )}
         </div>
       </div>
 

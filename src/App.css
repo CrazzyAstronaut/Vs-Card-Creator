@@ -1937,6 +1937,50 @@ html, body, #root {
 .text-muted { color: var(--text-3); font-size: 13px; }
 .font-mono { font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; }
 
+/* ── Card size slider (estilo "esfuerzo") ── */
+.size-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-2);
+  background: var(--bg-2);
+}
+.size-control-label { font-size: 12px; font-weight: 600; color: var(--text-3); white-space: nowrap; }
+.size-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 110px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--bg-5);
+  outline: none;
+  cursor: pointer;
+}
+.size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-3);
+  border: 2px solid var(--bg-0);
+  box-shadow: 0 0 0 1px var(--accent-3);
+  cursor: pointer;
+}
+.size-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-3);
+  border: 2px solid var(--bg-0);
+  cursor: pointer;
+}
+.size-control-readout { display: flex; flex-direction: column; line-height: 1.1; min-width: 64px; }
+.size-control-readout strong { font-size: 12px; color: var(--accent-4); }
+.size-control-range { font-size: 10px; color: var(--text-4); }
+
 /* ── Avatars / image upload ── */
 .avatar-upload {
   width: 64px;
@@ -1995,6 +2039,79 @@ html, body, #root {
   object-fit: cover;
   vertical-align: middle;
   margin-right: 6px;
+}
+
+/* ── Concepto retrato (imagen detrás del texto, sin globo) ── */
+.message.portrait {
+  max-width: 100%;
+  width: 100%;
+  align-self: stretch;
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-2);
+  border: 1px solid var(--border-1);
+  min-height: 132px;
+  display: flex;
+}
+
+.message.portrait .portrait-img {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 46%;
+  background-size: cover;
+  background-position: center 18%;
+}
+
+.message.portrait.side-left .portrait-img {
+  left: 0;
+  -webkit-mask-image: linear-gradient(to right, #000 30%, transparent 92%);
+  mask-image: linear-gradient(to right, #000 30%, transparent 92%);
+}
+
+.message.portrait.side-right .portrait-img {
+  right: 0;
+  -webkit-mask-image: linear-gradient(to left, #000 30%, transparent 92%);
+  mask-image: linear-gradient(to left, #000 30%, transparent 92%);
+}
+
+.message.portrait .message-content {
+  position: relative;
+  z-index: 1;
+  padding: 16px 22px;
+  width: 100%;
+  align-self: center;
+}
+
+.message.portrait.side-left .message-content { padding-left: 44%; }
+.message.portrait.side-right .message-content { padding-right: 44%; }
+
+.message-name {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin-bottom: 8px;
+  color: var(--accent-4);
+}
+.message.portrait.side-right .message-name { text-align: right; color: #c9a7ef; }
+
+.message-text {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.message.portrait.error { border-color: var(--error); }
+
+@media (max-width: 600px) {
+  .message.portrait .portrait-img { width: 40%; }
+  .message.portrait.side-left .message-content { padding-left: 38%; }
+  .message.portrait.side-right .message-content { padding-right: 38%; }
+  .message-name { font-size: 16px; }
 }
 
 /* ── Universe background grid (chat) ── */

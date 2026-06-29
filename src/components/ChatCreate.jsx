@@ -1,7 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { extractCardFromText, cardToStorageItem, parseThinkingContent, downloadCard, providerFromBaseUrl, summarizeCardForContext, buildRosterSummary, detectMentionedCards } from '../utils/cardSchema.js'
+import { extractCardFromText, cardToStorageItem, parseThinkingContent, downloadCard, providerFromBaseUrl, summarizeCardForContext, buildRosterSummary, detectMentionedCards, cleanPromptOutput } from '../utils/cardSchema.js'
 import { playPing } from '../utils/sound.js'
+import { fileToResizedDataURL } from '../utils/image.js'
+import { CARD_SIZES, cardSizeById, cardSizeIndex, cardSizeInstruction } from '../utils/cardSizes.js'
+import { SD_PROMPT, buildSdUserContent } from '../utils/imagePrompt.js'
+import { streamChat } from '../utils/aiClient.js'
 
 const COWORK_STEPS = ['Concepto', 'Personalidad', 'Apariencia', 'Historia', 'Escenario', 'Voz', 'Generando']
 
@@ -20,15 +24,16 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 160) + 'px'
 }
 
-export default function ChatCreate({ settings, presets, cards, setCards }) {
+export default function ChatCreate({ settings, setSettings, presets, cards, setCards, imagePresets = [] }) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [currentCard, setCurrentCard] = useState(null)
   const [previewTab, setPreviewTab] = useState('fields')
-  const [mode, setMode] = useState('chat')
-  const [selectedPresetId, setSelectedPresetId] = useState('')
+  const [mode, setMode] = useState(settings.lastMode || 'chat')
+  const [selectedPresetId, setSelectedPresetId] = useState(settings.lastPresetId || '')
+  const [cardSize, setCardSize] = useState(settings.cardSize || 'medium')
   const [coworkStep, setCoworkStep] = useState(0)
   const [thinkingOpen, setThinkingOpen] = useState({})
   const [toasts, setToasts] = useState([])
@@ -43,6 +48,7 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
   const messagesEndRef = useRef(null)
   const abortRef = useRef(null)
   const genRequestedRef = useRef(false) // en cowork, solo se extrae la tarjeta cuando se pide generar
+  const previewImgRef = useRef(null)
 
   const addToast = (msg, type = 'info') => {
     const id = Date.now()
@@ -53,12 +59,24 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
   // Get preset list filtered by mode
   const availablePresets = presets.filter(p => !mode || p.mode === mode || p.mode === 'chat')
 
-  // Sync preset when mode changes
+  // Solo auto-selecciona un preset si el actual NO es válido para el modo
+  // (así se conserva la elección del usuario al salir y volver).
   useEffect(() => {
+    const current = presets.find(p => p.id === selectedPresetId)
+    const valid = current && (current.mode === mode || current.mode === 'chat')
+    if (valid) return
     const modePresets = presets.filter(p => p.mode === mode)
-    if (modePresets.length > 0) setSelectedPresetId(modePresets[0].id)
-    else if (presets.length > 0) setSelectedPresetId(presets[0].id)
-  }, [mode, presets])
+    setSelectedPresetId((modePresets[0] || presets[0])?.id || '')
+  }, [mode, presets, selectedPresetId])
+
+  // Persistir modo, preset y tamaño elegidos (sobreviven a la navegación)
+  useEffect(() => {
+    setSettings?.(s => {
+      if (s.lastMode === mode && s.lastPresetId === selectedPresetId && s.cardSize === cardSize) return s
+      return { ...s, lastMode: mode, lastPresetId: selectedPresetId, cardSize }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, selectedPresetId, cardSize])
 
   const selectedPreset = presets.find(p => p.id === selectedPresetId) || presets[0]
 
@@ -158,8 +176,10 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
 
     const extraSystems = []
     if (mode === 'cowork') extraSystems.push(COWORK_GUIDE)
+    extraSystems.push(cardSizeInstruction(cardSize))
     if (universeSys) extraSystems.push(universeSys)
     const apiMessages = buildApiMessages(allMsgs, systemPrompt, extraSystems)
+    const sizeMaxTokens = cardSizeById(cardSize).maxTokens
 
     try {
       const controller = new AbortController()
@@ -175,7 +195,7 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
           model: settings.model,
           messages: apiMessages,
           temperature: settings.temperature ?? 0.8,
-          maxTokens: settings.maxTokens ?? 8192,
+          maxTokens: Math.max(settings.maxTokens ?? 0, sizeMaxTokens),
           stream: true
         })
       })
@@ -253,7 +273,7 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [isLoading, settings, selectedPreset, messages, mode, buildApiMessages, buildUniverseContext])
+  }, [isLoading, settings, selectedPreset, messages, mode, cardSize, buildApiMessages, buildUniverseContext])
 
   // Start co-work with AI greeting
   const startCowork = useCallback(async () => {
@@ -364,6 +384,26 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
     })
     setSaved(true)
     addToast(`"${currentCard.data?.name || 'Personaje'}" guardado${relations.length ? ` · ${relations.length} relación(es)` : ''}`, 'success')
+
+    // Auto-generar prompt de imagen con el preset de imagen elegido (si está activo)
+    if (settings.autoImagePrompt && settings.apiKey) {
+      const imgPreset = imagePresets.find(p => p.id === settings.autoImagePresetId) || imagePresets[0]
+      if (imgPreset?.template) {
+        streamChat({
+          settings,
+          messages: [
+            { role: 'system', content: SD_PROMPT },
+            { role: 'user', content: buildSdUserContent(imgPreset.template, item.data) }
+          ]
+        }).then(full => {
+          const prompt = cleanPromptOutput(full)
+          if (prompt) {
+            setCards(prev => prev.map(c => c._id === item._id ? { ...c, _sdPrompt: prompt } : c))
+            addToast('Prompt de imagen generado automáticamente', 'success')
+          }
+        }).catch(() => {})
+      }
+    }
   }
 
   const handleKeyDown = (e) => {
@@ -371,6 +411,19 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
       e.preventDefault()
       sendMessage(input)
     }
+  }
+
+  const pickPreviewImage = async (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      try {
+        const dataUrl = await fileToResizedDataURL(file, 320)
+        setCurrentCard(prev => prev ? { ...prev, _avatar: dataUrl } : prev)
+      } catch (err) {
+        addToast(`No se pudo cargar la imagen: ${err.message}`, 'error')
+      }
+    }
+    e.target.value = ''
   }
 
   const forceGenerate = () => {
@@ -424,6 +477,24 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
             <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
             Co-work
           </button>
+        </div>
+
+        {/* Tamaño de tarjeta (slider tipo "esfuerzo") */}
+        <div className="size-control" title="Tamaño / longitud de la tarjeta">
+          <span className="size-control-label">Tamaño</span>
+          <input
+            type="range"
+            className="size-slider"
+            min="0"
+            max={CARD_SIZES.length - 1}
+            step="1"
+            value={cardSizeIndex(cardSize)}
+            onChange={e => setCardSize(CARD_SIZES[Number(e.target.value)].id)}
+          />
+          <span className="size-control-readout">
+            <strong>{cardSizeById(cardSize).label}</strong>
+            <span className="size-control-range">{cardSizeById(cardSize).range}</span>
+          </span>
         </div>
 
         {/* Universo compartido */}
@@ -524,6 +595,7 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
                 setThinkingOpen={setThinkingOpen}
                 aiAvatar={selectedPreset?.image}
                 aiName={selectedPreset?.name}
+                userAvatar={settings.userAvatar}
               />
             ))}
 
@@ -616,11 +688,14 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
                 </button>
               )}
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => downloadCard({ ...currentCard, _id: '', _createdAt: '', _updatedAt: '', _meta: {} })}>
-                  <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  Descargar .json
+                <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => previewImgRef.current?.click()}>
+                  {currentCard._avatar ? '🖼️ Cambiar imagen' : '🖼️ Añadir imagen'}
                 </button>
-                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => { setCurrentCard(null); setSaved(false) }}>
+                <input ref={previewImgRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickPreviewImage} />
+                <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => downloadCard({ ...currentCard, _id: '', _createdAt: '', _updatedAt: '', _meta: {} })}>
+                  Descargar
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setCurrentCard(null); setSaved(false) }}>
                   Descartar
                 </button>
               </div>
@@ -682,31 +757,46 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
   )
 }
 
-function Message({ msg, thinkingOpen, setThinkingOpen, aiAvatar, aiName }) {
+function Message({ msg, thinkingOpen, setThinkingOpen, aiAvatar, aiName, userAvatar }) {
   const isUser = msg.role === 'user'
+  const avatar = isUser ? userAvatar : aiAvatar
+  const name = isUser ? 'Tú' : (aiName || 'IA')
   const hasThinking = Boolean(msg.thinkingContent)
   const isOpen = thinkingOpen[msg.id]
 
+  const thinkingBlock = hasThinking && (
+    <div className="message-thinking">
+      <div className="thinking-header" onClick={() => setThinkingOpen(p => ({ ...p, [msg.id]: !p[msg.id] }))}>
+        <span className="thinking-icon" style={{ animation: msg.isStreaming ? 'spin 2s linear infinite' : 'none' }}>⟳</span>
+        <span>Razonamiento interno</span>
+        <span style={{ marginLeft: 'auto' }}>{isOpen ? '▲' : '▼'}</span>
+      </div>
+      {isOpen && <div className="thinking-body">{msg.thinkingContent}</div>}
+    </div>
+  )
+
+  // Concepto retrato: imagen del personaje/persona detrás del texto, sin globo.
+  if (avatar) {
+    return (
+      <div className={`message portrait ${isUser ? 'side-right' : 'side-left'} ${msg.isError ? 'error' : ''}`}>
+        <div className="portrait-img" style={{ backgroundImage: `url(${avatar})` }} aria-hidden="true" />
+        <div className="message-content">
+          <div className="message-name">{name}</div>
+          {thinkingBlock}
+          <div className="message-text">
+            {msg.content || (msg.isStreaming ? '' : '...')}
+            {msg.isStreaming && <span style={{ opacity: 0.5, animation: 'pulse 1s ease-in-out infinite' }}>▋</span>}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Sin avatar: estilo clásico de globo
   return (
     <div className={`message ${msg.role} ${msg.isError ? 'error' : ''}`}>
-      <div className="message-role">
-        {!isUser && aiAvatar && <img src={aiAvatar} alt="" className="msg-avatar" />}
-        {isUser ? 'Tú' : (aiName || 'IA')}
-      </div>
-
-      {hasThinking && (
-        <div className="message-thinking">
-          <div className="thinking-header" onClick={() => setThinkingOpen(p => ({ ...p, [msg.id]: !p[msg.id] }))}>
-            <span className="thinking-icon" style={{ animation: msg.isStreaming ? 'spin 2s linear infinite' : 'none' }}>⟳</span>
-            <span>Razonamiento interno</span>
-            <span style={{ marginLeft: 'auto' }}>{isOpen ? '▲' : '▼'}</span>
-          </div>
-          {isOpen && (
-            <div className="thinking-body">{msg.thinkingContent}</div>
-          )}
-        </div>
-      )}
-
+      <div className="message-role">{name}</div>
+      {thinkingBlock}
       <div className="message-bubble">
         {msg.content || (msg.isStreaming ? '' : '...')}
         {msg.isStreaming && <span style={{ opacity: 0.5, animation: 'pulse 1s ease-in-out infinite' }}>▋</span>}

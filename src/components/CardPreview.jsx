@@ -4,6 +4,7 @@ import { downloadCard, CARD_FIELD_LABELS, cardToStorageItem, extractTranslatedCa
 import { streamChat } from '../utils/aiClient.js'
 import { fileToResizedDataURL } from '../utils/image.js'
 import { playPing } from '../utils/sound.js'
+import { SD_PROMPT, buildSdUserContent } from '../utils/imagePrompt.js'
 
 function formatDate(iso) {
   return new Date(iso).toLocaleString('es-ES', {
@@ -66,18 +67,6 @@ Tu trabajo:
 <<<END_CARD_JSON>>>
 
 Incluye SIEMPRE todos los campos que tenga la tarjeta (aunque no cambien) para no perder información.`
-
-const SD_PROMPT = `Eres un experto creando prompts para Stable Diffusion en estilo Danbooru/booru (etiquetas en inglés separadas por comas).
-
-Recibirás una PLANTILLA con marcadores entre < > y la información de un personaje. Tu tarea es sustituir ÚNICAMENTE los marcadores < > por etiquetas que describan ese aspecto del personaje.
-
-Reglas estrictas:
-- Mantén TODO lo demás de la plantilla EXACTAMENTE igual: LoRA (<lora:...>), tags de calidad, BREAK, pesos como (tag:1.4), comas, estructura y saltos de línea.
-- NO traduzcas ni modifiques los <lora:...>; déjalos tal cual.
-- Sustituye cada marcador por etiquetas booru concisas en inglés (ej: blue eyes, long hair, school uniform, big breasts, wide hips).
-- Marcadores por zonas: "Upper" = cabeza/cara/pelo/ojos/expresión; "Medium" = torso/pecho/ropa superior; "Bottom" = cintura/caderas/ropa inferior/piernas. Si el marcador tiene otro nombre, infiere su significado.
-- Usa pesos (tag:1.2-1.5) solo cuando aporte, como en el ejemplo.
-- Devuelve ÚNICAMENTE el prompt final resultante. Sin explicaciones, sin comillas de código, sin texto adicional.`
 
 export default function CardPreview({ cards, setCards, settings, imagePresets = [], presets = [] }) {
   const { id } = useParams()
@@ -266,14 +255,6 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
     setSdGenerating(true)
     setSdResult('')
 
-    const charInfo = [
-      `Nombre: ${d.name || '(sin nombre)'}`,
-      d.description && `Descripción: ${d.description}`,
-      d.personality && `Personalidad: ${d.personality}`,
-      d.scenario && `Escenario: ${d.scenario}`,
-      d.tags?.length && `Etiquetas: ${d.tags.join(', ')}`
-    ].filter(Boolean).join('\n')
-
     try {
       const controller = new AbortController()
       sdAbortRef.current = controller
@@ -282,7 +263,7 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
         signal: controller.signal,
         messages: [
           { role: 'system', content: SD_PROMPT },
-          { role: 'user', content: `PLANTILLA:\n${sdTemplate}\n\nPERSONAJE:\n${charInfo}` }
+          { role: 'user', content: buildSdUserContent(sdTemplate, d) }
         ],
         onDelta: (full) => setSdResult(cleanPromptOutput(full))
       })
@@ -583,6 +564,19 @@ ${JSON.stringify(card.data, null, 2)}`
         </div>
       )}
 
+      {/* Prompt de imagen guardado */}
+      {card._sdPrompt && (
+        <div className="relations-section">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-1)' }}>🎨 Prompt de imagen guardado</span>
+            <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(card._sdPrompt); addToast('Prompt copiado', 'success') }}>Copiar</button>
+          </div>
+          <pre style={{ fontFamily: 'Cascadia Code, Consolas, monospace', fontSize: '12px', color: 'var(--text-2)', background: 'var(--bg-1)', padding: '12px', borderRadius: 'var(--radius-sm)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
+            {card._sdPrompt}
+          </pre>
+        </div>
+      )}
+
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', background: 'var(--bg-2)', padding: '4px', borderRadius: 'var(--radius-md)', width: 'fit-content' }}>
         {[['view', 'Vista'], ['edit', 'Editar campos'], ['json', 'JSON']].map(([k, l]) => (
@@ -863,9 +857,14 @@ ${JSON.stringify(card.data, null, 2)}`
             </div>
             <div className="modal-footer">
               {sdResult && (
-                <button className="btn btn-secondary" onClick={() => { navigator.clipboard.writeText(sdResult); addToast('Prompt copiado al portapapeles', 'success') }}>
-                  Copiar prompt
-                </button>
+                <>
+                  <button className="btn btn-secondary" onClick={() => { navigator.clipboard.writeText(sdResult); addToast('Prompt copiado al portapapeles', 'success') }}>
+                    Copiar prompt
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => { setCards(prev => prev.map(c => c._id === id ? { ...c, _sdPrompt: sdResult } : c)); addToast('Prompt guardado en la tarjeta', 'success') }}>
+                    Guardar en la tarjeta
+                  </button>
+                </>
               )}
               <button className="btn btn-ghost" onClick={() => navigate('/image-presets')}>Gestionar presets</button>
               <button className="btn btn-ghost" onClick={() => !sdGenerating && setSdOpen(false)}>Cerrar</button>

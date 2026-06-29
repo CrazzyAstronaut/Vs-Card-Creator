@@ -7,7 +7,13 @@ export const DEFAULT_SETTINGS = {
   creatorName: '',
   streamingEnabled: true,
   subscriptionOnly: false,
-  soundEnabled: true
+  soundEnabled: true,
+  cardSize: 'medium',
+  autoImagePrompt: false,
+  autoImagePresetId: '',
+  userAvatar: '',
+  lastMode: 'chat',
+  lastPresetId: ''
 }
 
 export function createEmptyCard() {
@@ -105,7 +111,7 @@ export function cardToStorageItem(card, meta = {}) {
 
 export function downloadCard(card) {
   // Strip internal metadata fields before export
-  const { _id, _createdAt, _updatedAt, _meta, _relations, _avatar, ...exportCard } = card
+  const { _id, _createdAt, _updatedAt, _meta, _relations, _avatar, _sdPrompt, ...exportCard } = card
   const json = JSON.stringify(exportCard, null, 2)
   const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
