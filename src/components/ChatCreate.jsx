@@ -5,6 +5,15 @@ import { playPing } from '../utils/sound.js'
 
 const COWORK_STEPS = ['Concepto', 'Personalidad', 'Apariencia', 'Historia', 'Escenario', 'Voz', 'Generando']
 
+// Instrucción que fuerza el flujo guiado paso a paso del modo Co-work.
+const COWORK_GUIDE = `MODO CO-WORK (creación guiada paso a paso):
+- Haz UNA sola pregunta por mensaje para profundizar en el diseño del personaje, avanzando por temas: concepto, personalidad, apariencia, historia/trasfondo, relaciones, escenario y voz/estilo de habla.
+- Razona brevemente sobre la respuesta anterior del usuario antes de hacer la siguiente pregunta, y propon opciones o sugerencias cuando ayude.
+- IMPORTANTE: NO generes todavía la tarjeta ni NINGÚN bloque JSON. Mantén la conversación abierta y espera más respuestas.
+- Genera la tarjeta final (un único objeto JSON en bloque \`\`\`json con spec chara_card_v2) ÚNICAMENTE cuando el usuario te lo pida de forma explícita (por ejemplo al pulsar el botón "Generar tarjeta ahora", que enviará una instrucción [GENERAR AHORA]). Solo en ese momento, repasa TODAS las respuestas dadas y construye la tarjeta completa y coherente a partir de ellas.`
+
+const GENERATE_NOW_MSG = '[GENERAR AHORA] Ya tengo suficiente información. Repasa todas mis respuestas anteriores y genera ahora la tarjeta completa en formato JSON (bloque ```json con spec chara_card_v2), basándote en todo lo que hemos hablado.'
+
 function autoResize(el) {
   if (!el) return
   el.style.height = 'auto'
@@ -33,6 +42,7 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
   const textareaRef = useRef(null)
   const messagesEndRef = useRef(null)
   const abortRef = useRef(null)
+  const genRequestedRef = useRef(false) // en cowork, solo se extrae la tarjeta cuando se pide generar
 
   const addToast = (msg, type = 'info') => {
     const id = Date.now()
@@ -140,7 +150,16 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
     const allMsgs = [...messages, userMsg]
     const { sys: universeSys, ids: relIds } = buildUniverseContext(userText)
     if (relIds.length) setUsedRelationIds(prev => Array.from(new Set([...prev, ...relIds])))
-    const apiMessages = buildApiMessages(allMsgs, systemPrompt, universeSys ? [universeSys] : [])
+
+    // En co-work: detectar si el usuario pide generar (por texto) y habilitar la extracción
+    if (mode === 'cowork' && /\b(genera|generar|gener[aá]la|crea(?:\s+la)?\s+tarjeta|finaliza|term[ií]nala?)\b/i.test(userText)) {
+      genRequestedRef.current = true
+    }
+
+    const extraSystems = []
+    if (mode === 'cowork') extraSystems.push(COWORK_GUIDE)
+    if (universeSys) extraSystems.push(universeSys)
+    const apiMessages = buildApiMessages(allMsgs, systemPrompt, extraSystems)
 
     try {
       const controller = new AbortController()
@@ -205,8 +224,11 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
       ))
       if (settings.soundEnabled !== false) playPing()
 
-      // Try to extract card
-      const card = extractCardFromText(finalContent)
+      // En co-work no se finaliza la tarjeta hasta que el usuario pide generar.
+      const allowExtract = mode !== 'cowork' || genRequestedRef.current
+      const card = allowExtract ? extractCardFromText(finalContent) : null
+      genRequestedRef.current = false
+
       if (card) {
         if (settings.creatorName) card.data.creator = settings.creatorName
         setCurrentCard(card)
@@ -241,6 +263,7 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
     setCoworkStep(0)
     setSaved(false)
     setIsLoading(true)
+    genRequestedRef.current = false
 
     const aiMsgId = Date.now()
     setMessages([{ id: aiMsgId, role: 'assistant', content: '', thinkingContent: '', isStreaming: true }])
@@ -248,7 +271,8 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
     const systemPrompt = selectedPreset?.systemPrompt || ''
     const initPrompt = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: 'Iniciamos el proceso de co-creación. Preséntate brevemente y hazme la primera pregunta para comenzar a diseñar mi personaje.' }
+      { role: 'system', content: COWORK_GUIDE },
+      { role: 'user', content: 'Iniciamos el proceso de co-creación. Preséntate brevemente en 1-2 frases y hazme SOLO la primera pregunta para empezar a diseñar mi personaje. No generes todavía ninguna tarjeta ni JSON.' }
     ]
 
     try {
@@ -350,7 +374,9 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
   }
 
   const forceGenerate = () => {
-    sendMessage('Ya tengo suficiente información. Por favor genera la tarjeta completa en formato JSON ahora.')
+    if (isLoading) return
+    genRequestedRef.current = true
+    sendMessage(GENERATE_NOW_MSG)
   }
 
   const clearConversation = () => {
@@ -430,9 +456,9 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
           </button>
         )}
 
-        {mode === 'cowork' && messages.length > 4 && !currentCard && (
-          <button className="btn btn-secondary btn-sm" onClick={forceGenerate} disabled={isLoading}>
-            ⚡ Generar ahora
+        {mode === 'cowork' && messages.length > 0 && !currentCard && (
+          <button className="btn btn-primary btn-sm" onClick={forceGenerate} disabled={isLoading}>
+            ⚡ Generar tarjeta ahora
           </button>
         )}
 
