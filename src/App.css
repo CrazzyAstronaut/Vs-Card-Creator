@@ -64,6 +64,7 @@ html, body, #root {
 .app-container {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -685,6 +686,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -1923,3 +1925,180 @@ html, body, #root {
 .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .text-muted { color: var(--text-3); font-size: 13px; }
 .font-mono { font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; }
+
+/* ── Mobile menu (hidden on desktop) ── */
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: calc(9px + env(safe-area-inset-top));
+  left: calc(10px + env(safe-area-inset-left));
+  z-index: 1060;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-3);
+  border: 1px solid var(--border-3);
+  border-radius: var(--radius-md);
+  color: var(--text-1);
+  cursor: pointer;
+}
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1040;
+  backdrop-filter: blur(2px);
+}
+
+.sidebar-close {
+  display: none;
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* ============================================================
+   Responsive — Tablet / Mobile
+   ============================================================ */
+@media (max-width: 860px) {
+  .preview-panel { width: 360px; min-width: 320px; }
+}
+
+@media (max-width: 768px) {
+  /* Sidebar como cajón deslizable */
+  .mobile-menu-btn { display: flex; }
+  .sidebar-overlay { display: block; }
+  .sidebar-close { display: flex; align-items: center; justify-content: center; }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 1050;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  /* Contenedores de página: hueco arriba para el botón de menú */
+  .dashboard,
+  .presets-page,
+  .settings-page,
+  .card-preview-page {
+    padding: calc(58px + env(safe-area-inset-top)) 16px 24px;
+  }
+
+  /* Deja sitio al botón de menú dentro de la barra del chat */
+  .chat-toolbar { padding-top: calc(12px + env(safe-area-inset-top)); }
+  .card-preview-page { max-width: 100%; }
+  .settings-page { max-width: 100%; }
+
+  /* Cabeceras: apilar título y acciones */
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 0;
+  }
+  .page-header > div:last-child { flex-wrap: wrap; }
+  .page-title { font-size: 20px; }
+
+  /* Grids a una columna */
+  .cards-grid { grid-template-columns: 1fr; gap: 14px; }
+  .presets-grid { grid-template-columns: 1fr; }
+  .settings-row { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: 1fr 1fr; }
+  .creation-details { grid-template-columns: 1fr 1fr; }
+
+  /* Chat: barra de herramientas deja sitio al botón de menú */
+  .chat-toolbar { padding: 12px 14px 12px 58px; gap: 8px; }
+  .preset-select { min-width: 0; flex: 1 1 140px; }
+
+  /* Chat: apilar conversación y vista previa */
+  .chat-body { flex-direction: column; }
+  .chat-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--border-1);
+    flex: 1 1 auto;
+    min-height: 45vh;
+  }
+  .preview-panel {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex: 0 0 auto;
+    max-height: 48vh;
+  }
+  .messages-list { padding: 16px; gap: 16px; }
+  .message { max-width: 95%; }
+
+  /* Editar con IA / panel lateral: a ancho completo, no fijo */
+  .card-preview-layout { flex-direction: column; }
+  .card-edit-panel {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 70vh;
+  }
+
+  /* Cabecera de tarjeta */
+  .card-preview-header { flex-direction: column; }
+  .card-preview-name { font-size: 22px; }
+  .card-preview-header > div:last-child { flex-wrap: wrap; }
+
+  /* Modales ocupan casi toda la pantalla */
+  .modal-overlay { padding: 12px; align-items: flex-end; }
+  .modal { max-width: 100%; max-height: 92vh; }
+  .modal-footer { flex-wrap: wrap; }
+  .modal-footer .btn { flex: 1 1 auto; }
+
+  /* Barra flotante de multi-selección centrada sin sidebar */
+  .multi-bar {
+    margin-left: 0;
+    left: 12px;
+    right: 12px;
+    transform: none;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .multi-bar-info { text-align: center; }
+
+  /* Asistente de presets (panel lateral) a ancho completo */
+  .preset-editor-layout { flex-direction: column; }
+  .ai-assist-panel {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 70vh;
+  }
+
+  /* Picker de tarjetas */
+  .picker-list { max-height: 60vh; }
+}
+
+@media (max-width: 480px) {
+  .stats-row { grid-template-columns: 1fr 1fr; }
+  .creation-details { grid-template-columns: 1fr; }
+  .page-title { font-size: 18px; }
+  .chat-toolbar-title { font-size: 14px; }
+  .btn { font-size: 13px; }
+  .modal-overlay { padding: 0; }
+  .modal { max-height: 100vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+}

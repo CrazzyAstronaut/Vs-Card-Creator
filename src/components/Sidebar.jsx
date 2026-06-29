@@ -24,7 +24,7 @@ const NAV_ITEMS = [
   }
 ]
 
-export default function Sidebar({ settings }) {
+export default function Sidebar({ settings, open, onClose }) {
   const [isConnected, setIsConnected] = useState(null)
 
   useEffect(() => {
@@ -42,13 +42,14 @@ export default function Sidebar({ settings }) {
   const hasApiKey = Boolean(settings?.apiKey)
 
   return (
-    <nav className="sidebar">
+    <nav className={`sidebar ${open ? 'open' : ''}`}>
       <div className="sidebar-header">
         <div className="sidebar-logo">✦</div>
         <div>
           <span className="sidebar-title-main">V's</span>
           <span className="sidebar-title-sub">Card Creator</span>
         </div>
+        <button className="sidebar-close" onClick={onClose} aria-label="Cerrar menú">✕</button>
       </div>
 
       <div className="sidebar-nav">
@@ -57,6 +58,7 @@ export default function Sidebar({ settings }) {
             key={item.path}
             to={item.path}
             end={item.end}
+            onClick={onClose}
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
           >
             <span className="sidebar-icon">{item.icon}</span>

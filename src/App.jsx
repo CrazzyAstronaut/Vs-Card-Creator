@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Sidebar from './components/Sidebar.jsx'
 import Dashboard from './components/Dashboard.jsx'
@@ -18,12 +19,18 @@ export default function App() {
   const [presets, setPresets] = useLocalStorage('vcc_presets', DEFAULT_PRESETS)
   const [imagePresets, setImagePresets] = useLocalStorage('vcc_image_presets', DEFAULT_IMAGE_PRESETS)
 
+  const [menuOpen, setMenuOpen] = useState(false)
+
   const sharedProps = { settings, setSettings, cards, setCards, presets, setPresets, imagePresets, setImagePresets }
 
   return (
     <BrowserRouter>
       <div className="app-container">
-        <Sidebar settings={settings} />
+        <button className="mobile-menu-btn" onClick={() => setMenuOpen(true)} aria-label="Abrir menú">
+          <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        {menuOpen && <div className="sidebar-overlay" onClick={() => setMenuOpen(false)} />}
+        <Sidebar settings={settings} open={menuOpen} onClose={() => setMenuOpen(false)} />
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Dashboard {...sharedProps} />} />
