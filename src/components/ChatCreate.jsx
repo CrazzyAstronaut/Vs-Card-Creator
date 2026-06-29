@@ -417,7 +417,7 @@ export default function ChatCreate({ settings, setSettings, presets, cards, setC
     const file = e.target.files?.[0]
     if (file) {
       try {
-        const dataUrl = await fileToResizedDataURL(file, 320)
+        const dataUrl = await fileToResizedDataURL(file, 768, 0.9)
         setCurrentCard(prev => prev ? { ...prev, _avatar: dataUrl } : prev)
       } catch (err) {
         addToast(`No se pudo cargar la imagen: ${err.message}`, 'error')

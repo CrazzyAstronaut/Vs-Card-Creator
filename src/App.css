@@ -2051,7 +2051,8 @@ html, body, #root {
   overflow: hidden;
   background: var(--bg-2);
   border: 1px solid var(--border-1);
-  min-height: 132px;
+  min-height: 104px;
+  height: auto;
   display: flex;
 }
 
@@ -2059,9 +2060,10 @@ html, body, #root {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 46%;
+  width: 34%;
   background-size: cover;
-  background-position: center 18%;
+  background-position: center 15%;
+  image-rendering: auto;
 }
 
 .message.portrait.side-left .portrait-img {
@@ -2084,8 +2086,8 @@ html, body, #root {
   align-self: center;
 }
 
-.message.portrait.side-left .message-content { padding-left: 44%; }
-.message.portrait.side-right .message-content { padding-right: 44%; }
+.message.portrait.side-left .message-content { padding-left: 36%; }
+.message.portrait.side-right .message-content { padding-right: 36%; }
 
 .message-name {
   font-family: Georgia, 'Times New Roman', serif;
@@ -2108,7 +2110,7 @@ html, body, #root {
 .message.portrait.error { border-color: var(--error); }
 
 @media (max-width: 600px) {
-  .message.portrait .portrait-img { width: 40%; }
+  .message.portrait .portrait-img { width: 36%; }
   .message.portrait.side-left .message-content { padding-left: 38%; }
   .message.portrait.side-right .message-content { padding-right: 38%; }
   .message-name { font-size: 16px; }

@@ -82,7 +82,7 @@ export default function PresetManager({ settings, presets, setPresets }) {
     const file = e.target.files?.[0]
     if (file) {
       try {
-        const dataUrl = await fileToResizedDataURL(file, 256)
+        const dataUrl = await fileToResizedDataURL(file, 768, 0.9)
         setForm(p => ({ ...p, image: dataUrl }))
       } catch (err) {
         addToast(`No se pudo cargar la imagen: ${err.message}`, 'error')

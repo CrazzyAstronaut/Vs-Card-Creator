@@ -22,7 +22,7 @@ export default function Settings({ settings, setSettings, cards, setCards, prese
     const file = e.target.files?.[0]
     if (file) {
       try {
-        const dataUrl = await fileToResizedDataURL(file, 256)
+        const dataUrl = await fileToResizedDataURL(file, 768, 0.9)
         setSettings(s => ({ ...s, userAvatar: dataUrl }))
       } catch (err) {
         // eslint-disable-next-line no-console

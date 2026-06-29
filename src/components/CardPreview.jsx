@@ -367,7 +367,7 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
     const file = e.target.files?.[0]
     if (file) {
       try {
-        const dataUrl = await fileToResizedDataURL(file, 320)
+        const dataUrl = await fileToResizedDataURL(file, 768, 0.9)
         setCards(prev => prev.map(c => c._id === id ? { ...c, _avatar: dataUrl, _updatedAt: new Date().toISOString() } : c))
         addToast('Imagen actualizada', 'success')
       } catch (err) {
