@@ -4,7 +4,7 @@ REM  V's Card Creator - Arranque con un solo clic (Windows)
 REM  - Instala dependencias (solo la primera vez)
 REM  - Construye la app
 REM  - Arranca el servidor (frontend + API en el mismo puerto)
-REM  - Deja activo el acceso por Tailscale (IP + serve)
+REM  - Muestra la URL de acceso por Tailscale (IP del tailnet)
 REM ============================================================
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
@@ -60,8 +60,6 @@ set "TSIP="
 if defined TS (
   echo [OK] Tailscale detectado
   for /f "usebackq tokens=1" %%i in (`"%TS%" ip -4`) do if not defined TSIP set "TSIP=%%i"
-  echo [..] Activando acceso por Tailscale...
-  "%TS%" serve --bg %PORT% >nul 2>nul || "%TS%" serve --bg http://127.0.0.1:%PORT% >nul 2>nul
 ) else (
   echo [i] Tailscale no detectado. La app estara disponible en tu red local.
   echo     Instalalo desde https://tailscale.com/download para acceso remoto.
@@ -80,6 +78,4 @@ echo.
 REM 5) Arrancar el servidor (sirve frontend + API en 0.0.0.0:PORT)
 call node server/index.js
 
-REM Limpieza al terminar
-if defined TS "%TS%" serve --bg off >nul 2>nul
 pause
