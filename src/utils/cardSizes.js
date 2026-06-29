@@ -20,7 +20,9 @@ export function cardSizeIndex(id) {
 }
 
 // Instrucción de longitud que se inyecta al sistema para guiar a la IA.
+// IMPORTANTE: el presupuesto se refiere a TOKENS PERMANENTES (los que siempre
+// están en el contexto), NO a first_mes, mes_example ni alternate_greetings.
 export function cardSizeInstruction(id) {
   const s = cardSizeById(id)
-  return `OBJETIVO DE LONGITUD (${s.label}): la tarjeta resultante debe sumar aproximadamente ${s.range} tokens en total entre todos sus campos de texto (description, personality, scenario, first_mes, mes_example, etc.). Mantén un nivel de detalle ${s.detail}, ajustando la extensión de cada campo a ese presupuesto. No te excedas demasiado del rango indicado.`
+  return `OBJETIVO DE LONGITUD (${s.label}): aproximadamente ${s.range} TOKENS PERMANENTES. Solo cuentan los campos que permanecen siempre en el contexto: "description", "personality", "scenario", "system_prompt" y "post_history_instructions". NO se cuentan "first_mes", "mes_example" ni "alternate_greetings" (esos pueden tener la longitud que necesiten para ser naturales). Mantén un nivel de detalle ${s.detail} en los campos permanentes, ajustando su extensión a ese presupuesto sin excederte demasiado del rango.`
 }
