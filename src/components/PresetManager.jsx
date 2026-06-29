@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { extractPresetFromText, stripPresetMarkers } from '../utils/cardSchema.js'
+import { fileToResizedDataURL } from '../utils/image.js'
+import { playPing } from '../utils/sound.js'
 
 const MODE_LABELS = { chat: 'Chat', cowork: 'Co-work' }
 
@@ -27,8 +29,9 @@ Reglas importantes:
 
 export default function PresetManager({ settings, presets, setPresets }) {
   const [editing, setEditing] = useState(null) // preset id or 'new'
-  const [form, setForm] = useState({ name: '', description: '', mode: 'chat', systemPrompt: '' })
+  const [form, setForm] = useState({ name: '', description: '', mode: 'chat', systemPrompt: '', image: '' })
   const [toasts, setToasts] = useState([])
+  const imageInputRef = useRef(null)
 
   // AI assist state
   const [aiOpen, setAiOpen] = useState(false)
@@ -58,7 +61,7 @@ export default function PresetManager({ settings, presets, setPresets }) {
   }
 
   const openNew = () => {
-    setForm({ name: '', description: '', mode: 'chat', systemPrompt: '' })
+    setForm({ name: '', description: '', mode: 'chat', systemPrompt: '', image: '' })
     setEditing('new')
     setAiMessages([])
   }
@@ -68,10 +71,24 @@ export default function PresetManager({ settings, presets, setPresets }) {
       name: preset.name,
       description: preset.description || '',
       mode: preset.mode || 'chat',
-      systemPrompt: preset.systemPrompt || ''
+      systemPrompt: preset.systemPrompt || '',
+      image: preset.image || ''
     })
     setEditing(preset.id)
     setAiMessages([])
+  }
+
+  const pickImage = async (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      try {
+        const dataUrl = await fileToResizedDataURL(file, 256)
+        setForm(p => ({ ...p, image: dataUrl }))
+      } catch (err) {
+        addToast(`No se pudo cargar la imagen: ${err.message}`, 'error')
+      }
+    }
+    e.target.value = ''
   }
 
   const cancel = () => { setEditing(null); resetAi() }
@@ -87,6 +104,7 @@ export default function PresetManager({ settings, presets, setPresets }) {
         description: form.description.trim(),
         mode: form.mode,
         systemPrompt: form.systemPrompt,
+        image: form.image || '',
         isDefault: false,
         createdAt: new Date().toISOString()
       }
@@ -95,7 +113,7 @@ export default function PresetManager({ settings, presets, setPresets }) {
     } else {
       setPresets(prev => prev.map(p =>
         p.id === editing
-          ? { ...p, name: form.name.trim(), description: form.description.trim(), mode: form.mode, systemPrompt: form.systemPrompt }
+          ? { ...p, name: form.name.trim(), description: form.description.trim(), mode: form.mode, systemPrompt: form.systemPrompt, image: form.image || '' }
           : p
       ))
       addToast('Preset actualizado', 'success')
@@ -207,6 +225,7 @@ export default function PresetManager({ settings, presets, setPresets }) {
           ? { ...m, content: display || (preset ? 'He actualizado el preset en la vista previa.' : full), isStreaming: false }
           : m
       ))
+      if (settings.soundEnabled !== false) playPing()
 
       if (preset) {
         setForm(prev => ({
@@ -316,6 +335,23 @@ export default function PresetManager({ settings, presets, setPresets }) {
             </div>
 
             <div className="form-group">
+              <label className="form-label">Imagen del "narrador" (opcional)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div className="avatar-upload" onClick={() => imageInputRef.current?.click()} title="Subir imagen">
+                  {form.image
+                    ? <img src={form.image} alt="" className="avatar-upload-img" />
+                    : <span className="avatar-upload-placeholder">＋</span>}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => imageInputRef.current?.click()}>Subir imagen</button>
+                  {form.image && <button className="btn btn-ghost btn-sm" onClick={() => setForm(p => ({ ...p, image: '' }))}>Quitar</button>}
+                </div>
+                <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickImage} />
+              </div>
+              <span className="form-hint">Se mostrará como icono del preset y como avatar de la IA al crear tarjetas con él.</span>
+            </div>
+
+            <div className="form-group">
               <label className="form-label">System Prompt *</label>
               {showFieldSkeleton ? (
                 <span className="skeleton skeleton-field tall" />
@@ -341,7 +377,8 @@ export default function PresetManager({ settings, presets, setPresets }) {
             </div>
           </div>
 
-          {/* AI assist chat panel */}
+          {/* AI assist chat panel (cajón a la derecha) */}
+          {aiOpen && <div className="ai-drawer-overlay" onClick={() => setAiOpen(false)} />}
           {aiOpen && (
             <div className="ai-assist-panel">
               <div className="ai-assist-header">
@@ -427,7 +464,10 @@ export default function PresetManager({ settings, presets, setPresets }) {
         {presets.map(preset => (
           <div key={preset.id} className={`preset-card ${editing === preset.id ? 'selected' : ''}`}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-              <div className="preset-card-name">{preset.name}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                {preset.image && <img src={preset.image} alt="" className="preset-avatar" />}
+                <div className="preset-card-name">{preset.name}</div>
+              </div>
               {preset.isDefault && <span className="tag tag-purple" style={{ flexShrink: 0 }}>Default</span>}
             </div>
             <div className="preset-card-mode">Modo: {MODE_LABELS[preset.mode] || preset.mode}</div>

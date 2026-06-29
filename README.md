@@ -23,6 +23,10 @@ Herramienta web para crear tarjetas de personaje para **SillyTavern** con asiste
 - **Relaciones entre tarjetas** — Vincula personajes y deja que la IA ajuste una tarjeta para reflejar la relación, según el preset
 - **Detalles de creación** — Cada tarjeta registra cómo se creó (modelo, distribuidor, preset, modo, temperature, universo)
 - **Tarjetas multi-personaje** — Fusiona varias tarjetas en una sola con un narrador en tercera persona como `{{char}}`
+- **Imágenes/avatares** — Adjunta una imagen a las tarjetas y a los presets ("narradores"); su icono aparece en el chat
+- **Fondo de universo** — Al crear con el modo Universo, los iconos de las tarjetas (todas en Auto, las seleccionadas en Manual) se muestran como fondo tenue del chat
+- **Borradores automáticos** — Las conversaciones y cambios sin confirmar se guardan solos y se restauran al volver
+- **Sonido de notificación** — Un "ping" suena cuando la IA termina de responder (desactivable en Ajustes)
 - **API compatible con OpenAI** — Funciona con cualquier proveedor compatible: nano-gpt, OpenAI, OpenRouter, Ollama local, etc.
 - **Carga dinámica de modelos** — Obtén la lista de modelos directamente desde la API, con un switch **"Solo suscripción"** que filtra a los modelos incluidos en la suscripción de nanogpt
 - **Sin hardcodeo** — La API key se guarda en localStorage del navegador, nunca en el código ni en el servidor

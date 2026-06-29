@@ -375,6 +375,26 @@ export default function Settings({ settings, setSettings, cards, setCards, prese
         </div>
       </div>
 
+      {/* Preferences */}
+      <div className="settings-section">
+        <div className="settings-section-header">
+          <span className="settings-section-icon">🔔</span>
+          <span className="settings-section-title">Preferencias</span>
+        </div>
+        <div className="settings-section-body">
+          <div className="switch-row">
+            <div className="switch-info">
+              <div className="switch-info-title">Sonido de notificación</div>
+              <div className="switch-info-desc">Reproduce un "ping" cuando la IA termina de responder.</div>
+            </div>
+            <label className="switch">
+              <input type="checkbox" checked={settings.soundEnabled !== false} onChange={e => update('soundEnabled', e.target.checked)} />
+              <span className="switch-slider" />
+            </label>
+          </div>
+        </div>
+      </div>
+
       {/* Data management */}
       <div className="settings-section">
         <div className="settings-section-header">

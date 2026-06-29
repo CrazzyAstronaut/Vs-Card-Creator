@@ -285,7 +285,9 @@ function CharCard({ card, onClick, onDownload, onDelete, onEditAi, onSdPrompt, s
         </div>
       )}
       <div className="char-card-header">
-        <div className="char-avatar">{initial}</div>
+        <div className="char-avatar">
+          {card._avatar ? <img src={card._avatar} alt="" className="char-avatar-img" /> : initial}
+        </div>
         <div className="char-card-info">
           <div className="char-card-name">{name}</div>
           <div className="char-card-date">{date}</div>

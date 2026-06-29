@@ -1263,27 +1263,48 @@ html, body, #root {
 
 /* ── AI Assist panel (preset creator) ── */
 .preset-editor-layout {
-  display: flex;
-  gap: 16px;
-  align-items: stretch;
+  display: block;
 }
 
 .preset-editor-layout .preset-editor {
-  flex: 1;
   min-width: 0;
 }
 
+/* Cajón de chat IA fijo a la DERECHA de la pantalla (no pegado a los campos) */
 .ai-assist-panel {
-  width: 400px;
-  min-width: 340px;
-  max-width: 440px;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 92vw;
+  z-index: 1080;
   background: var(--bg-0);
-  border: 1px solid var(--border-2);
-  border-radius: var(--radius-lg);
+  border-left: 1px solid var(--border-3);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.45);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  align-self: stretch;
+  animation: drawerIn 0.22s ease;
+}
+
+@keyframes drawerIn {
+  from { transform: translateX(30px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.ai-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 1070;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .ai-assist-header {
@@ -1331,25 +1352,15 @@ html, body, #root {
 
 /* ── Card preview + AI edit layout ── */
 .card-preview-layout {
-  display: flex;
-  gap: 20px;
-  align-items: flex-start;
+  display: block;
 }
 
 .card-preview-main {
-  flex: 1;
   min-width: 0;
 }
 
-.card-edit-panel {
-  position: sticky;
-  top: 0;
-  width: 400px;
-  min-width: 340px;
-  max-width: 440px;
-  height: calc(100vh - 56px);
-  flex-shrink: 0;
-}
+/* El panel de edición usa el cajón fijo de .ai-assist-panel */
+.card-edit-panel { /* hereda .ai-assist-panel */ }
 
 /* ── Skeleton loading ── */
 .skeleton {
@@ -1926,6 +1937,99 @@ html, body, #root {
 .text-muted { color: var(--text-3); font-size: 13px; }
 .font-mono { font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; }
 
+/* ── Avatars / image upload ── */
+.avatar-upload {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-3);
+  background: var(--bg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+.avatar-upload:hover { border-color: var(--accent-3); }
+.avatar-upload-img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-upload-placeholder { font-size: 26px; color: var(--text-4); }
+
+.preset-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.unsaved-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--warning);
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.saved-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--success);
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.char-avatar-img,
+.card-preview-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+/* Avatar de la IA en el chat (narrador del preset) */
+.msg-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+/* ── Universe background grid (chat) ── */
+.universe-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  opacity: 0.10;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  grid-auto-rows: 96px;
+  align-content: start;
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.25));
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.25));
+}
+.universe-bg-item {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.universe-bg-item img { width: 100%; height: 100%; object-fit: cover; }
+.universe-bg-item span { font-size: 30px; font-weight: 700; color: var(--text-4); }
+
+.chat-panel { position: relative; }
+.chat-panel > .messages-list,
+.chat-panel > .chat-input-area { position: relative; z-index: 1; }
+.chat-panel > .messages-list { background: transparent; }
+
 /* ── Mobile menu (hidden on desktop) ── */
 .mobile-menu-btn {
   display: none;
@@ -2043,16 +2147,6 @@ html, body, #root {
   .messages-list { padding: 16px; gap: 16px; }
   .message { max-width: 95%; }
 
-  /* Editar con IA / panel lateral: a ancho completo, no fijo */
-  .card-preview-layout { flex-direction: column; }
-  .card-edit-panel {
-    position: static;
-    width: 100%;
-    min-width: 0;
-    max-width: none;
-    height: 70vh;
-  }
-
   /* Cabecera de tarjeta */
   .card-preview-header { flex-direction: column; }
   .card-preview-name { font-size: 22px; }
@@ -2080,14 +2174,8 @@ html, body, #root {
   }
   .multi-bar-info { text-align: center; }
 
-  /* Asistente de presets (panel lateral) a ancho completo */
-  .preset-editor-layout { flex-direction: column; }
-  .ai-assist-panel {
-    width: 100%;
-    min-width: 0;
-    max-width: none;
-    height: 70vh;
-  }
+  /* Cajón de chat IA a ancho completo en móvil */
+  .ai-assist-panel { width: 100%; max-width: 100%; }
 
   /* Picker de tarjetas */
   .picker-list { max-height: 60vh; }

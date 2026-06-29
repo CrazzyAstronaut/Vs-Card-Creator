@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { downloadCard, CARD_FIELD_LABELS, cardToStorageItem, extractTranslatedCard, cleanPromptOutput, stripCardMarkers } from '../utils/cardSchema.js'
 import { streamChat } from '../utils/aiClient.js'
+import { fileToResizedDataURL } from '../utils/image.js'
+import { playPing } from '../utils/sound.js'
 
 function formatDate(iso) {
   return new Date(iso).toLocaleString('es-ES', {
@@ -95,6 +97,7 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
   const aiAbortRef = useRef(null)
   const aiEndRef = useRef(null)
   const autoOpenedRef = useRef(false)
+  const avatarInputRef = useRef(null)
 
   // Relations
   const [relAddOpen, setRelAddOpen] = useState(false)
@@ -332,6 +335,7 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
           ? { ...m, content: display || (parsed ? 'He actualizado la tarjeta.' : full), isStreaming: false }
           : m
       ))
+      if (settings.soundEnabled !== false) playPing()
 
       if (parsed) {
         const allowed = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes', 'system_prompt', 'post_history_instructions', 'alternate_greetings', 'tags', 'creator', 'character_version']
@@ -377,6 +381,20 @@ export default function CardPreview({ cards, setCards, settings, imagePresets = 
     else if (panel === 'sd') { openSd(); autoOpenedRef.current = true; setSearchParams({}, { replace: true }) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, card])
+
+  const pickAvatar = async (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      try {
+        const dataUrl = await fileToResizedDataURL(file, 320)
+        setCards(prev => prev.map(c => c._id === id ? { ...c, _avatar: dataUrl, _updatedAt: new Date().toISOString() } : c))
+        addToast('Imagen actualizada', 'success')
+      } catch (err) {
+        addToast(`No se pudo cargar la imagen: ${err.message}`, 'error')
+      }
+    }
+    e.target.value = ''
+  }
 
   // ── Relations ──
   const relations = card._relations || []
@@ -464,7 +482,12 @@ ${JSON.stringify(card.data, null, 2)}`
       {/* Header */}
       <div className="card-preview-header">
         <div className="card-preview-title-row">
-          <div className="card-preview-avatar">{(d.name || '?').charAt(0).toUpperCase()}</div>
+          <div className="card-preview-avatar" onClick={() => avatarInputRef.current?.click()} title="Cambiar imagen" style={{ cursor: 'pointer', overflow: 'hidden' }}>
+            {card._avatar
+              ? <img src={card._avatar} alt="" className="card-preview-avatar-img" />
+              : (d.name || '?').charAt(0).toUpperCase()}
+          </div>
+          <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickAvatar} />
           <div>
             <div className="card-preview-name">{d.name || 'Sin nombre'}</div>
             <div className="card-preview-meta">
@@ -647,7 +670,8 @@ ${JSON.stringify(card.data, null, 2)}`
       )}
       </div>{/* /card-preview-main */}
 
-      {/* AI edit chat panel */}
+      {/* AI edit chat panel (cajón a la derecha) */}
+      {aiEditOpen && <div className="ai-drawer-overlay" onClick={() => setAiEditOpen(false)} />}
       {aiEditOpen && (
         <aside className="ai-assist-panel card-edit-panel">
           <div className="ai-assist-header">

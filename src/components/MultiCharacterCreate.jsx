@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { extractCardFromText, cardToStorageItem, parseThinkingContent, downloadCard, buildCharacterProfile, providerFromBaseUrl } from '../utils/cardSchema.js'
 import { streamChat } from '../utils/aiClient.js'
+import { playPing } from '../utils/sound.js'
 
 const MULTI_SYSTEM = `Eres un experto en crear tarjetas "multi-personaje" (group roleplay) para SillyTavern (formato chara_card_v2).
 
@@ -40,13 +41,19 @@ function autoResize(el) {
 export default function MultiCharacterCreate({ cards, setCards, settings }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const ids = location.state?.ids || []
+  const navIds = location.state?.ids
+  // Borrador previo (auto-guardado) por si se volvió sin estado de navegación
+  const [restored] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('vcc_draft_multi') || 'null') } catch { return null }
+  })
+  const fresh = Boolean(navIds)
+  const ids = navIds || restored?.ids || []
   const selected = cards.filter(c => ids.includes(c._id))
 
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState(() => fresh ? [] : (restored?.messages || []))
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [currentCard, setCurrentCard] = useState(null)
+  const [currentCard, setCurrentCard] = useState(() => fresh ? null : (restored?.currentCard || null))
   const [previewTab, setPreviewTab] = useState('fields')
   const [thinkingOpen, setThinkingOpen] = useState({})
   const [saved, setSaved] = useState(false)
@@ -61,6 +68,17 @@ export default function MultiCharacterCreate({ cards, setCards, settings }) {
   }
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  // Auto-guardado del borrador de la conversación multi-personaje
+  useEffect(() => {
+    try {
+      if (messages.length || currentCard) {
+        localStorage.setItem('vcc_draft_multi', JSON.stringify({ ids, messages, currentCard }))
+      } else {
+        localStorage.removeItem('vcc_draft_multi')
+      }
+    } catch {}
+  }, [messages, currentCard, ids])
 
   const profiles = selected.map(buildCharacterProfile).join('\n\n')
   const names = selected.map(c => c.data?.name || 'Personaje')
@@ -103,6 +121,7 @@ export default function MultiCharacterCreate({ cards, setCards, settings }) {
       const parsedThink = parseThinkingContent(full)
       const finalContent = parsedThink.thinking ? parsedThink.clean : full
       setMessages(prev => prev.map(m => m.id === aiId ? { ...m, content: finalContent, thinkingContent: parsedThink.thinking || think, isStreaming: false } : m))
+      if (settings.soundEnabled !== false) playPing()
 
       const card = extractCardFromText(finalContent)
       if (card) {

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { extractCardFromText, cardToStorageItem, parseThinkingContent, downloadCard, providerFromBaseUrl, summarizeCardForContext, buildRosterSummary, detectMentionedCards } from '../utils/cardSchema.js'
+import { playPing } from '../utils/sound.js'
 
 const COWORK_STEPS = ['Concepto', 'Personalidad', 'Apariencia', 'Historia', 'Escenario', 'Voz', 'Generando']
 
@@ -54,6 +55,34 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Restaurar borrador de conversación al entrar (auto-guardado)
+  const draftLoaded = useRef(false)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('vcc_draft_chat')
+      if (raw) {
+        const d = JSON.parse(raw)
+        if (Array.isArray(d.messages) && d.messages.length) setMessages(d.messages)
+        if (d.currentCard) { setCurrentCard(d.currentCard); setCoworkStep(COWORK_STEPS.length - 1) }
+        if (d.mode) setMode(d.mode)
+      }
+    } catch {}
+    draftLoaded.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Guardar borrador en cada cambio (queda sin confirmar hasta Guardar/Descartar)
+  useEffect(() => {
+    if (!draftLoaded.current) return
+    try {
+      if (messages.length || currentCard) {
+        localStorage.setItem('vcc_draft_chat', JSON.stringify({ messages, currentCard, mode }))
+      } else {
+        localStorage.removeItem('vcc_draft_chat')
+      }
+    } catch {}
+  }, [messages, currentCard, mode])
 
   const buildApiMessages = useCallback((msgs, systemPrompt, extraSystems = []) => {
     const apiMsgs = []
@@ -174,6 +203,7 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
           ? { ...m, content: finalContent, thinkingContent: finalThinking, isStreaming: false }
           : m
       ))
+      if (settings.soundEnabled !== false) playPing()
 
       // Try to extract card
       const card = extractCardFromText(finalContent)
@@ -333,6 +363,10 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
 
   const coworkProgress = Math.round((coworkStep / (COWORK_STEPS.length - 1)) * 100)
 
+  const universeCards = sharedUniverse
+    ? (suMode === 'manual' ? cards.filter(c => selectedRelatedIds.includes(c._id)) : cards)
+    : []
+
   return (
     <div className="chat-create">
       {/* Toolbar */}
@@ -430,6 +464,15 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
       <div className="chat-body">
         {/* Chat panel */}
         <div className="chat-panel">
+          {sharedUniverse && universeCards.length > 0 && (
+            <div className="universe-bg" aria-hidden="true">
+              {universeCards.map(c => (
+                <div key={c._id} className="universe-bg-item">
+                  {c._avatar ? <img src={c._avatar} alt="" /> : <span>{(c.data?.name || '?').charAt(0).toUpperCase()}</span>}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="messages-list">
             {messages.length === 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '16px', textAlign: 'center', color: 'var(--text-4)', padding: '40px' }}>
@@ -453,6 +496,8 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
                 msg={msg}
                 thinkingOpen={thinkingOpen}
                 setThinkingOpen={setThinkingOpen}
+                aiAvatar={selectedPreset?.image}
+                aiName={selectedPreset?.name}
               />
             ))}
 
@@ -503,7 +548,11 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
         {/* Preview panel */}
         <div className="preview-panel">
           <div className="preview-header">
-            <span className="preview-title">Vista previa</span>
+            <span className="preview-title">
+              Vista previa
+              {currentCard && !saved && <span className="unsaved-badge" title="Cambios sin guardar">● Sin guardar</span>}
+              {currentCard && saved && <span className="saved-badge">✓ Guardada</span>}
+            </span>
             {currentCard && (
               <div className="preview-tabs">
                 <button className={`preview-tab ${previewTab === 'fields' ? 'active' : ''}`} onClick={() => setPreviewTab('fields')}>Campos</button>
@@ -607,14 +656,17 @@ export default function ChatCreate({ settings, presets, cards, setCards }) {
   )
 }
 
-function Message({ msg, thinkingOpen, setThinkingOpen }) {
+function Message({ msg, thinkingOpen, setThinkingOpen, aiAvatar, aiName }) {
   const isUser = msg.role === 'user'
   const hasThinking = Boolean(msg.thinkingContent)
   const isOpen = thinkingOpen[msg.id]
 
   return (
     <div className={`message ${msg.role} ${msg.isError ? 'error' : ''}`}>
-      <div className="message-role">{isUser ? 'Tú' : 'IA'}</div>
+      <div className="message-role">
+        {!isUser && aiAvatar && <img src={aiAvatar} alt="" className="msg-avatar" />}
+        {isUser ? 'Tú' : (aiName || 'IA')}
+      </div>
 
       {hasThinking && (
         <div className="message-thinking">
